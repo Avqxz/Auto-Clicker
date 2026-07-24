@@ -1,5 +1,6 @@
 -- Server bootstrap for the Clicking Simulator.
--- Owns all game state mutation: clicks, purchases, pets/eggs, rebirths, and autosaving.
+-- Owns all game state mutation: clicks, purchases, pets/eggs, rebirths, autosaving,
+-- and builds the map + pet-follower presentation.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,6 +8,12 @@ local RunService = game:GetService("RunService")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerData = require(script.PlayerData)
+local MapBuilder = require(script.MapBuilder)
+local PetFollowers = require(script.PetFollowers)
+
+-- ===== Map =====
+
+local mapRefs = MapBuilder.Build()
 
 -- ===== Remotes =====
 
@@ -80,11 +87,11 @@ local function findById(list, id)
 end
 
 local function getEquippedPets(data)
-	local equipped = {}
 	local equippedSet = {}
 	for _, uid in ipairs(data.EquippedPetUids) do
 		equippedSet[uid] = true
 	end
+	local equipped = {}
 	for _, pet in ipairs(data.Pets) do
 		if equippedSet[pet.Uid] then
 			table.insert(equipped, pet)
@@ -98,22 +105,28 @@ local function getClickPower(data)
 	return data.ClickPower * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
 end
 
+local function refreshFollowers(player, data)
+	PetFollowers.Refresh(player, getEquippedPets(data))
+end
+
 -- ===== Player lifecycle =====
 
 Players.PlayerAdded:Connect(function(player)
 	local data = PlayerData.Load(player)
 	setupLeaderstats(player, data)
 	pushData(player)
+	refreshFollowers(player, data)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
 	PlayerData.Release(player)
+	PetFollowers.Clear(player)
 	lastClickTimes[player.UserId] = nil
 end)
 
 -- ===== Clicking =====
 
-ClickRemote.OnServerEvent:Connect(function(player)
+local function handleClick(player)
 	local now = os.clock()
 	local last = lastClickTimes[player.UserId]
 	if last and now - last < GameConfig.ClickCooldown then
@@ -132,7 +145,9 @@ ClickRemote.OnServerEvent:Connect(function(player)
 
 	updateLeaderstats(player)
 	pushData(player)
-end)
+end
+
+ClickRemote.OnServerEvent:Connect(handleClick)
 
 -- ===== Purchases =====
 
@@ -179,7 +194,7 @@ end)
 
 -- ===== Pets & eggs =====
 
-HatchEggRemote.OnServerEvent:Connect(function(player, eggId)
+local function handleHatchEgg(player, eggId)
 	local data = PlayerData.Get(player)
 	local egg = findById(GameConfig.Eggs, eggId)
 	if not data or not egg then
@@ -209,14 +224,21 @@ HatchEggRemote.OnServerEvent:Connect(function(player, eggId)
 	}
 	table.insert(data.Pets, newPet)
 
+	local equipChanged = false
 	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount) then
 		table.insert(data.EquippedPetUids, uid)
+		equipChanged = true
 	end
 
 	updateLeaderstats(player)
 	pushData(player)
 	EggResultRemote:FireClient(player, newPet)
-end)
+	if equipChanged then
+		refreshFollowers(player, data)
+	end
+end
+
+HatchEggRemote.OnServerEvent:Connect(handleHatchEgg)
 
 EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 	local data = PlayerData.Get(player)
@@ -237,6 +259,7 @@ EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 		if pet.Name == name and pet.Rarity == rarity and pet.Golden == golden and not equippedSet[pet.Uid] then
 			table.insert(data.EquippedPetUids, pet.Uid)
 			pushData(player)
+			refreshFollowers(player, data)
 			return
 		end
 	end
@@ -258,6 +281,7 @@ UnequipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 		if pet and pet.Name == name and pet.Rarity == rarity and pet.Golden == golden then
 			table.remove(data.EquippedPetUids, i)
 			pushData(player)
+			refreshFollowers(player, data)
 			return
 		end
 	end
@@ -320,11 +344,12 @@ FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
 
 	updateLeaderstats(player)
 	pushData(player)
+	refreshFollowers(player, data)
 end)
 
 -- ===== Rebirth =====
 
-RebirthRemote.OnServerEvent:Connect(function(player)
+local function handleRebirth(player)
 	local data = PlayerData.Get(player)
 	if not data then
 		return
@@ -344,7 +369,27 @@ RebirthRemote.OnServerEvent:Connect(function(player)
 
 	updateLeaderstats(player)
 	pushData(player)
-end)
+end
+
+RebirthRemote.OnServerEvent:Connect(handleRebirth)
+
+-- ===== In-world interactions (ClickDetectors on the map) =====
+
+local function addClickDetector(part, maxDistance)
+	local detector = Instance.new("ClickDetector")
+	detector.MaxActivationDistance = maxDistance or 32
+	detector.Parent = part
+	return detector
+end
+
+addClickDetector(mapRefs.ClickOrb).MouseClick:Connect(handleClick)
+addClickDetector(mapRefs.RebirthAltar).MouseClick:Connect(handleRebirth)
+
+for eggId, eggPart in pairs(mapRefs.EggParts) do
+	addClickDetector(eggPart).MouseClick:Connect(function(player)
+		handleHatchEgg(player, eggId)
+	end)
+end
 
 -- ===== Passive income (auto-clickers) =====
 

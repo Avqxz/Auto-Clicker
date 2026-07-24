@@ -4,8 +4,10 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local PetModelFactory = require(ReplicatedStorage.Modules.PetModelFactory)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -70,6 +72,28 @@ end
 local function getClickPower(data)
 	local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
 	return data.ClickPower * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+end
+
+-- Builds a small 3D preview of a pet model inside a ViewportFrame.
+local function createPetViewport(petData)
+	local viewportFrame = Instance.new("ViewportFrame")
+	viewportFrame.BackgroundTransparency = 1
+	viewportFrame.Ambient = Color3.fromRGB(150, 150, 150)
+	viewportFrame.LightColor = Color3.fromRGB(255, 255, 255)
+	viewportFrame.LightDirection = Vector3.new(-0.5, -1, -0.5)
+
+	local worldModel = Instance.new("WorldModel")
+	worldModel.Parent = viewportFrame
+
+	local model = PetModelFactory.Create(petData, { WithEffects = false })
+	model.Parent = worldModel
+
+	local camera = Instance.new("Camera")
+	camera.CFrame = CFrame.new(Vector3.new(0, 0.9, 3.4), Vector3.new(0, 0.4, 0))
+	camera.Parent = viewportFrame
+	viewportFrame.CurrentCamera = camera
+
+	return viewportFrame, model
 end
 
 -- ===== UI construction =====
@@ -468,11 +492,19 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 
 	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
 
+	local iconContainer = Instance.new("Frame")
+	iconContainer.Name = "IconContainer"
+	iconContainer.Position = UDim2.new(0, 8, 0, 8)
+	iconContainer.Size = UDim2.new(0, 74, 0, 74)
+	iconContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+	iconContainer.Parent = frame
+	Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
+
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "NameLabel"
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.new(0, 10, 0, 6)
-	nameLabel.Size = UDim2.new(1, -150, 0, 22)
+	nameLabel.Position = UDim2.new(0, 92, 0, 6)
+	nameLabel.Size = UDim2.new(1, -242, 0, 22)
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextScaled = true
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -481,8 +513,8 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 	local infoLabel = Instance.new("TextLabel")
 	infoLabel.Name = "InfoLabel"
 	infoLabel.BackgroundTransparency = 1
-	infoLabel.Position = UDim2.new(0, 10, 0, 28)
-	infoLabel.Size = UDim2.new(1, -150, 0, 18)
+	infoLabel.Position = UDim2.new(0, 92, 0, 28)
+	infoLabel.Size = UDim2.new(1, -242, 0, 18)
 	infoLabel.Font = Enum.Font.Gotham
 	infoLabel.TextScaled = true
 	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -492,8 +524,8 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 	local equippedLabel = Instance.new("TextLabel")
 	equippedLabel.Name = "EquippedLabel"
 	equippedLabel.BackgroundTransparency = 1
-	equippedLabel.Position = UDim2.new(0, 10, 0, 48)
-	equippedLabel.Size = UDim2.new(1, -150, 0, 16)
+	equippedLabel.Position = UDim2.new(0, 92, 0, 48)
+	equippedLabel.Size = UDim2.new(1, -242, 0, 16)
 	equippedLabel.Font = Enum.Font.Gotham
 	equippedLabel.TextScaled = true
 	equippedLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -531,6 +563,8 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 
 	local group = {
 		Frame = frame,
+		IconContainer = iconContainer,
+		IconBuilt = false,
 		NameLabel = nameLabel,
 		InfoLabel = infoLabel,
 		EquippedLabel = equippedLabel,
@@ -580,6 +614,13 @@ local function refreshPets()
 		local group = getOrCreatePetGroupFrame(key, layoutOrder)
 		group.Frame.Visible = true
 		group.Frame.LayoutOrder = layoutOrder
+
+		if not group.IconBuilt then
+			local viewport = createPetViewport(pet)
+			viewport.Size = UDim2.new(1, 0, 1, 0)
+			viewport.Parent = group.IconContainer
+			group.IconBuilt = true
+		end
 
 		local displayName = if pet.Golden then "Golden " .. pet.Name else pet.Name
 		local color = GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(255, 255, 255)
@@ -632,10 +673,11 @@ end
 local revealFrame = Instance.new("Frame")
 revealFrame.Name = "RevealFrame"
 revealFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-revealFrame.Position = UDim2.new(0.5, 0, 0.28, 0)
+revealFrame.Position = UDim2.new(0.5, 0, 0.3, 0)
 revealFrame.Size = UDim2.new(0, 0, 0, 0)
 revealFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 revealFrame.BackgroundTransparency = 1
+revealFrame.ClipsDescendants = true
 revealFrame.Parent = screenGui
 
 Instance.new("UICorner", revealFrame).CornerRadius = UDim.new(0, 14)
@@ -645,9 +687,29 @@ revealStroke.Thickness = 3
 revealStroke.Transparency = 1
 revealStroke.Parent = revealFrame
 
+local revealViewport = Instance.new("ViewportFrame")
+revealViewport.Name = "RevealViewport"
+revealViewport.BackgroundTransparency = 1
+revealViewport.Position = UDim2.new(0.5, 0, 0, 10)
+revealViewport.AnchorPoint = Vector2.new(0.5, 0)
+revealViewport.Size = UDim2.new(0, 120, 0, 120)
+revealViewport.Ambient = Color3.fromRGB(150, 150, 150)
+revealViewport.LightColor = Color3.fromRGB(255, 255, 255)
+revealViewport.Parent = revealFrame
+
+local revealWorldModel = Instance.new("WorldModel")
+revealWorldModel.Parent = revealViewport
+
+local revealCamera = Instance.new("Camera")
+revealCamera.CFrame = CFrame.new(Vector3.new(0, 0.9, 3.4), Vector3.new(0, 0.4, 0))
+revealCamera.Parent = revealViewport
+revealViewport.CurrentCamera = revealCamera
+
 local revealLabel = Instance.new("TextLabel")
+revealLabel.AnchorPoint = Vector2.new(0.5, 0)
+revealLabel.Position = UDim2.new(0.5, 0, 0, 134)
+revealLabel.Size = UDim2.new(1, -20, 0, 56)
 revealLabel.BackgroundTransparency = 1
-revealLabel.Size = UDim2.new(1, 0, 1, 0)
 revealLabel.Font = Enum.Font.GothamBlack
 revealLabel.TextScaled = true
 revealLabel.TextTransparency = 1
@@ -655,12 +717,28 @@ revealLabel.Text = ""
 revealLabel.Parent = revealFrame
 
 local revealToken = 0
+local revealRotationConnection = nil
+
 local function showPetReveal(pet)
 	revealToken += 1
 	local myToken = revealToken
 
 	local color = GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(255, 255, 255)
 	local displayName = if pet.Golden then "Golden " .. pet.Name else pet.Name
+
+	revealWorldModel:ClearAllChildren()
+	local model = PetModelFactory.Create(pet, { WithEffects = false })
+	model.Parent = revealWorldModel
+	local modelPivot = model:GetPivot()
+
+	if revealRotationConnection then
+		revealRotationConnection:Disconnect()
+		revealRotationConnection = nil
+	end
+	revealRotationConnection = RunService.RenderStepped:Connect(function(dt)
+		modelPivot = modelPivot * CFrame.Angles(0, dt * 2, 0)
+		model:PivotTo(modelPivot)
+	end)
 
 	revealFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 	revealStroke.Color = color
@@ -670,14 +748,18 @@ local function showPetReveal(pet)
 	TweenService:Create(
 		revealFrame,
 		TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Size = UDim2.new(0, 320, 0, 90), BackgroundTransparency = 0.1 }
+		{ Size = UDim2.new(0, 260, 0, 200), BackgroundTransparency = 0.1 }
 	):Play()
 	TweenService:Create(revealStroke, TweenInfo.new(0.2), { Transparency = 0 }):Play()
 	TweenService:Create(revealLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
 
-	task.delay(2, function()
+	task.delay(2.5, function()
 		if myToken ~= revealToken then
 			return
+		end
+		if revealRotationConnection then
+			revealRotationConnection:Disconnect()
+			revealRotationConnection = nil
 		end
 		TweenService:Create(
 			revealFrame,
