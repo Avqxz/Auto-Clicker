@@ -13,6 +13,9 @@ local DEFAULT_DATA = {
 	AutoClickerLevels = {},
 	RebirthCount = 0,
 	TotalCoinsEarned = 0,
+	Pets = {}, -- array of { Uid, Name, Rarity, Multiplier, Golden }
+	EquippedPetUids = {},
+	NextPetUid = 1,
 }
 
 local function deepCopy(t)

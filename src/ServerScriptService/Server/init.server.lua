@@ -1,5 +1,5 @@
 -- Server bootstrap for the Clicking Simulator.
--- Owns all game state mutation: clicks, purchases, rebirths, and autosaving.
+-- Owns all game state mutation: clicks, purchases, pets/eggs, rebirths, and autosaving.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,6 +26,11 @@ local PurchaseUpgradeRemote = createRemoteEvent("PurchaseUpgrade")
 local PurchaseAutoClickerRemote = createRemoteEvent("PurchaseAutoClicker")
 local RebirthRemote = createRemoteEvent("Rebirth")
 local DataUpdatedRemote = createRemoteEvent("DataUpdated")
+local HatchEggRemote = createRemoteEvent("HatchEgg")
+local EquipPetRemote = createRemoteEvent("EquipPet")
+local UnequipPetRemote = createRemoteEvent("UnequipPet")
+local FusePetsRemote = createRemoteEvent("FusePets")
+local EggResultRemote = createRemoteEvent("EggResult")
 
 local lastClickTimes = {}
 
@@ -74,6 +79,25 @@ local function findById(list, id)
 	return nil
 end
 
+local function getEquippedPets(data)
+	local equipped = {}
+	local equippedSet = {}
+	for _, uid in ipairs(data.EquippedPetUids) do
+		equippedSet[uid] = true
+	end
+	for _, pet in ipairs(data.Pets) do
+		if equippedSet[pet.Uid] then
+			table.insert(equipped, pet)
+		end
+	end
+	return equipped
+end
+
+local function getClickPower(data)
+	local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
+	return data.ClickPower * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+end
+
 -- ===== Player lifecycle =====
 
 Players.PlayerAdded:Connect(function(player)
@@ -102,7 +126,7 @@ ClickRemote.OnServerEvent:Connect(function(player)
 		return
 	end
 
-	local earned = data.ClickPower * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+	local earned = getClickPower(data)
 	data.Coins += earned
 	data.TotalCoinsEarned += earned
 
@@ -153,6 +177,151 @@ PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId)
 	pushData(player)
 end)
 
+-- ===== Pets & eggs =====
+
+HatchEggRemote.OnServerEvent:Connect(function(player, eggId)
+	local data = PlayerData.Get(player)
+	local egg = findById(GameConfig.Eggs, eggId)
+	if not data or not egg then
+		return
+	end
+
+	if data.RebirthCount < egg.RequiredRebirths then
+		return
+	end
+
+	if data.Coins < egg.Cost then
+		return
+	end
+
+	data.Coins -= egg.Cost
+
+	local rolled = GameConfig.RollPet(egg)
+	local uid = data.NextPetUid
+	data.NextPetUid += 1
+
+	local newPet = {
+		Uid = uid,
+		Name = rolled.Name,
+		Rarity = rolled.Rarity,
+		Multiplier = rolled.Multiplier,
+		Golden = false,
+	}
+	table.insert(data.Pets, newPet)
+
+	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount) then
+		table.insert(data.EquippedPetUids, uid)
+	end
+
+	updateLeaderstats(player)
+	pushData(player)
+	EggResultRemote:FireClient(player, newPet)
+end)
+
+EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+
+	if #data.EquippedPetUids >= GameConfig.GetMaxEquippedPets(data.RebirthCount) then
+		return
+	end
+
+	local equippedSet = {}
+	for _, uid in ipairs(data.EquippedPetUids) do
+		equippedSet[uid] = true
+	end
+
+	for _, pet in ipairs(data.Pets) do
+		if pet.Name == name and pet.Rarity == rarity and pet.Golden == golden and not equippedSet[pet.Uid] then
+			table.insert(data.EquippedPetUids, pet.Uid)
+			pushData(player)
+			return
+		end
+	end
+end)
+
+UnequipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+
+	local petsByUid = {}
+	for _, pet in ipairs(data.Pets) do
+		petsByUid[pet.Uid] = pet
+	end
+
+	for i, uid in ipairs(data.EquippedPetUids) do
+		local pet = petsByUid[uid]
+		if pet and pet.Name == name and pet.Rarity == rarity and pet.Golden == golden then
+			table.remove(data.EquippedPetUids, i)
+			pushData(player)
+			return
+		end
+	end
+end)
+
+FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+
+	local matches = {}
+	for _, pet in ipairs(data.Pets) do
+		if pet.Name == name and pet.Rarity == rarity and not pet.Golden then
+			table.insert(matches, pet)
+		end
+	end
+
+	if #matches < GameConfig.FusionRequirement then
+		return
+	end
+
+	local fuseUidSet = {}
+	for i = 1, GameConfig.FusionRequirement do
+		fuseUidSet[matches[i].Uid] = true
+	end
+	local fusedMultiplier = matches[1].Multiplier
+
+	local remainingPets = {}
+	for _, pet in ipairs(data.Pets) do
+		if not fuseUidSet[pet.Uid] then
+			table.insert(remainingPets, pet)
+		end
+	end
+	data.Pets = remainingPets
+
+	local remainingEquipped = {}
+	for _, uid in ipairs(data.EquippedPetUids) do
+		if not fuseUidSet[uid] then
+			table.insert(remainingEquipped, uid)
+		end
+	end
+	data.EquippedPetUids = remainingEquipped
+
+	local uid = data.NextPetUid
+	data.NextPetUid += 1
+
+	local goldenPet = {
+		Uid = uid,
+		Name = name,
+		Rarity = rarity,
+		Multiplier = fusedMultiplier * 2,
+		Golden = true,
+	}
+	table.insert(data.Pets, goldenPet)
+
+	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount) then
+		table.insert(data.EquippedPetUids, uid)
+	end
+
+	updateLeaderstats(player)
+	pushData(player)
+end)
+
 -- ===== Rebirth =====
 
 RebirthRemote.OnServerEvent:Connect(function(player)
@@ -166,6 +335,7 @@ RebirthRemote.OnServerEvent:Connect(function(player)
 		return
 	end
 
+	-- Pets are a permanent collection and carry over through rebirth.
 	data.Coins = 0
 	data.ClickPower = GameConfig.StartingClickPower
 	data.UpgradeLevels = {}
@@ -196,7 +366,8 @@ RunService.Heartbeat:Connect(function(dt)
 			end
 
 			if coinsPerSecond > 0 then
-				local earned = coinsPerSecond * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+				local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
+				local earned = coinsPerSecond * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
 				data.Coins += earned
 				data.TotalCoinsEarned += earned
 				updateLeaderstats(player)
