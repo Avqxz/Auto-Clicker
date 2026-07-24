@@ -107,6 +107,7 @@ GameConfig.Eggs = {
 		Name = "Basic Egg",
 		Cost = 100,
 		RequiredRebirths = 0,
+		Zone = "Farm",
 		Pets = {
 			{ Name = "Puppy", Rarity = "Common", Weight = 50, Multiplier = 1.1 },
 			{ Name = "Kitten", Rarity = "Common", Weight = 50, Multiplier = 1.15 },
@@ -121,6 +122,7 @@ GameConfig.Eggs = {
 		Name = "Golden Egg",
 		Cost = 25000,
 		RequiredRebirths = 1,
+		Zone = "Desert",
 		Pets = {
 			{ Name = "Golden Retriever", Rarity = "Rare", Weight = 40, Multiplier = 2 },
 			{ Name = "Griffin", Rarity = "Epic", Weight = 30, Multiplier = 3.5 },
