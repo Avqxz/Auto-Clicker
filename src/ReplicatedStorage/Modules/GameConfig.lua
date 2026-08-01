@@ -112,7 +112,7 @@ GameConfig.Eggs = {
 			{ Name = "Puppy", Rarity = "Common", Weight = 50, Multiplier = 1.1 },
 			{ Name = "Kitten", Rarity = "Common", Weight = 50, Multiplier = 1.15 },
 			{ Name = "Fox", Rarity = "Rare", Weight = 25, Multiplier = 1.5 },
-			{ Name = "Wolf", Rarity = "Rare", Weight = 20, Multiplier = 1.6 },
+			{ Name = "Wolf", Rarity = "Rare", Weight = 20, Multiplier = 1.8 },
 			{ Name = "Dragon", Rarity = "Epic", Weight = 8, Multiplier = 2.5 },
 			{ Name = "Phoenix", Rarity = "Legendary", Weight = 2, Multiplier = 6 },
 		},
