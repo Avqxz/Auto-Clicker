@@ -43,6 +43,30 @@ GameConfig.Upgrades = {
 		CostMultiplier = 1.22,
 		ClickPowerAdd = 150,
 	},
+	{
+		Id = "ClickPower5",
+		Name = "Titan Strike",
+		Description = "+800 coins per click",
+		BaseCost = 200000,
+		CostMultiplier = 1.24,
+		ClickPowerAdd = 800,
+	},
+	{
+		Id = "ClickPower6",
+		Name = "Colossus Punch",
+		Description = "+5,000 coins per click",
+		BaseCost = 3000000,
+		CostMultiplier = 1.26,
+		ClickPowerAdd = 5000,
+	},
+	{
+		Id = "ClickPower7",
+		Name = "Godly Tap",
+		Description = "+35,000 coins per click",
+		BaseCost = 50000000,
+		CostMultiplier = 1.28,
+		ClickPowerAdd = 35000,
+	},
 }
 
 GameConfig.AutoClickers = {
