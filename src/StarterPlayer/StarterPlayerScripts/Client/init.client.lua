@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local PetModelFactory = require(ReplicatedStorage.Modules.PetModelFactory)
@@ -125,37 +126,17 @@ coinLabel.TextColor3 = Color3.fromRGB(255, 215, 60)
 coinLabel.Text = "0 Coins"
 coinLabel.Parent = coinFrame
 
--- Click button
-local clickButton = Instance.new("TextButton")
-clickButton.Name = "ClickButton"
-clickButton.AnchorPoint = Vector2.new(0.5, 0.5)
-clickButton.Position = UDim2.new(0.5, 0, 0.52, 0)
-clickButton.Size = UDim2.new(0, 240, 0, 240)
-clickButton.BackgroundColor3 = Color3.fromRGB(255, 200, 40)
-clickButton.Text = "CLICK!"
-clickButton.Font = Enum.Font.GothamBlack
-clickButton.TextScaled = true
-clickButton.TextColor3 = Color3.fromRGB(40, 30, 0)
-clickButton.AutoButtonColor = true
-clickButton.Parent = screenGui
-
-Instance.new("UICorner", clickButton).CornerRadius = UDim.new(1, 0)
-
-local clickStroke = Instance.new("UIStroke")
-clickStroke.Thickness = 4
-clickStroke.Color = Color3.fromRGB(180, 130, 0)
-clickStroke.Parent = clickButton
-
--- Click power label
+-- Click power label (clicking is now a full-screen tap, not a dedicated button)
 local powerLabel = Instance.new("TextLabel")
 powerLabel.Name = "PowerLabel"
 powerLabel.AnchorPoint = Vector2.new(0.5, 0)
-powerLabel.Position = UDim2.new(0.5, 0, 0.52, 130)
-powerLabel.Size = UDim2.new(0, 300, 0, 30)
+powerLabel.Position = UDim2.new(0.5, 0, 0.02, 66)
+powerLabel.Size = UDim2.new(0, 280, 0, 26)
 powerLabel.BackgroundTransparency = 1
 powerLabel.Font = Enum.Font.Gotham
 powerLabel.TextScaled = true
 powerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+powerLabel.TextStrokeTransparency = 0.5
 powerLabel.Text = "+1 per click"
 powerLabel.Parent = screenGui
 
@@ -792,22 +773,51 @@ end
 
 -- ===== Interactions =====
 
-clickButton.MouseButton1Click:Connect(function()
-	ClickRemote:FireServer()
+-- Floating "+N" popup that appears where the player clicked/tapped, since
+-- there's no dedicated click button to animate anymore.
+local function spawnClickFeedback(screenPosition, amount)
+	local label = Instance.new("TextLabel")
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromOffset(screenPosition.X, screenPosition.Y)
+	label.Size = UDim2.fromOffset(140, 40)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 215, 60)
+	label.TextStrokeTransparency = 0.4
+	label.Text = "+" .. formatNumber(amount)
+	label.ZIndex = 10
+	label.Parent = screenGui
 
-	local shrink = TweenService:Create(
-		clickButton,
-		TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ Size = UDim2.new(0, 220, 0, 220) }
+	local tween = TweenService:Create(
+		label,
+		TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{
+			Position = UDim2.fromOffset(screenPosition.X, screenPosition.Y - 60),
+			TextTransparency = 1,
+			TextStrokeTransparency = 1,
+		}
 	)
-	shrink:Play()
-	shrink.Completed:Connect(function()
-		TweenService:Create(
-			clickButton,
-			TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-			{ Size = UDim2.new(0, 240, 0, 240) }
-		):Play()
+	tween:Play()
+	tween.Completed:Connect(function()
+		label:Destroy()
 	end)
+end
+
+-- Click anywhere on screen (not just a dedicated button). gameProcessedEvent
+-- is true when the input already hit a GuiButton (Shop/Eggs/Pets/Rebirth/etc),
+-- so this only fires for clicks/taps on empty space.
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+	if gameProcessedEvent then
+		return
+	end
+
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+		return
+	end
+
+	ClickRemote:FireServer()
+	spawnClickFeedback(Vector2.new(input.Position.X, input.Position.Y), getClickPower(currentData))
 end)
 
 rebirthButton.MouseButton1Click:Connect(function()
