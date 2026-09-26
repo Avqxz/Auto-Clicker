@@ -1,11 +1,13 @@
--- Minimal FUNCTIONAL map markers only. Deliberately not decorative:
--- procedurally-generated primitive parts (boxes/spheres/pyramids) have a
--- hard visual ceiling and were never going to look as good as a real asset
--- pack placed by hand in Studio. This script now only creates what gameplay
--- actually needs (spawn point, click point, rebirth altar, one marker per
--- egg), each labeled with a floating text tag so they're easy to find and
--- either dress up or leave as-is. Everything else -- ground, trees,
--- buildings, terrain -- is meant to be built by hand with Toolbox assets.
+-- Minimal FUNCTIONAL map markers only, organized into the Zones / Spawns /
+-- Interactives folder architecture common to Roblox simulator maps.
+-- Deliberately not decorative: procedurally-generated primitive parts
+-- (boxes/spheres/pyramids) have a hard visual ceiling and were never going
+-- to look as good as a real asset pack placed by hand in Studio. This script
+-- only creates what gameplay actually needs (spawn point, click point,
+-- rebirth altar, one marker per egg, and the Desert zone gate), each labeled
+-- with a floating text tag so they're easy to find and either dress up or
+-- leave as-is. Everything else -- ground, trees, buildings, terrain -- is
+-- meant to be built by hand with Toolbox assets.
 --
 -- IMPORTANT: this script destroys and rebuilds its own "Map" folder in
 -- Workspace every time the server starts. Do NOT put hand-placed scenery
@@ -20,6 +22,7 @@ local MapBuilder = {}
 
 local FARM_CENTER = Vector3.new(0, 0, 0)
 local DESERT_CENTER = Vector3.new(0, 0, -450)
+local DESERT_DOOR_Z = -150
 
 local function newPart(props)
 	local p = Instance.new("Part")
@@ -52,7 +55,7 @@ end
 
 -- Places one small marker per egg along an arc in front of `center`, facing
 -- back toward `facingCenter`. Returns { [eggId] = eggPart }.
-local function buildEggMarkers(mapFolder, eggs, center, facingCenter)
+local function buildEggMarkers(parentFolder, eggs, center, facingCenter)
 	local eggParts = {}
 	local count = #eggs
 	if count == 0 then
@@ -77,7 +80,7 @@ local function buildEggMarkers(mapFolder, eggs, center, facingCenter)
 			Position = Vector3.new(position.X, 3, position.Z),
 			Material = Enum.Material.Neon,
 			Color = Color3.fromRGB(255, 255, 255),
-			Parent = mapFolder,
+			Parent = parentFolder,
 		})
 		addLabel(pod, "Egg: " .. egg.Name)
 
@@ -87,7 +90,8 @@ local function buildEggMarkers(mapFolder, eggs, center, facingCenter)
 	return eggParts
 end
 
--- Returns references to the interactive parts so init.server.lua can wire up ClickDetectors.
+-- Returns references to the interactive parts so init.server.lua can wire up
+-- ClickDetectors and the Desert zone gate's Touched-based rebirth check.
 function MapBuilder.Build()
 	local existing = workspace:FindFirstChild("Map")
 	if existing then
@@ -106,6 +110,18 @@ function MapBuilder.Build()
 	mapFolder.Name = "Map"
 	mapFolder.Parent = workspace
 
+	local zonesFolder = Instance.new("Folder")
+	zonesFolder.Name = "Zones"
+	zonesFolder.Parent = mapFolder
+
+	local spawnsFolder = Instance.new("Folder")
+	spawnsFolder.Name = "Spawns"
+	spawnsFolder.Parent = mapFolder
+
+	local interactivesFolder = Instance.new("Folder")
+	interactivesFolder.Name = "Interactives"
+	interactivesFolder.Parent = mapFolder
+
 	-- Plain flat placeholder ground spanning both zones, just so players
 	-- don't fall through while you build real terrain/scenery. Replace or
 	-- hide this once you've placed real assets.
@@ -115,8 +131,21 @@ function MapBuilder.Build()
 		Position = Vector3.new(0, -2, -225),
 		Material = Enum.Material.SmoothPlastic,
 		Color = Color3.fromRGB(160, 160, 165),
-		Parent = mapFolder,
+		Parent = zonesFolder,
 	})
+
+	-- Desert zone gate: a full-width barrier players must physically cross,
+	-- gated by rebirths (see init.server.lua for the Touched-based check).
+	local desertDoor = newPart({
+		Name = "DesertDoor",
+		Size = Vector3.new(500, 20, 2),
+		Position = Vector3.new(0, 10, DESERT_DOOR_Z),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(220, 70, 70),
+		Transparency = 0.5,
+		Parent = zonesFolder,
+	})
+	addLabel(desertDoor, "Desert Zone Gate")
 
 	local spawnLocation = Instance.new("SpawnLocation")
 	spawnLocation.Name = "MainSpawn"
@@ -127,7 +156,7 @@ function MapBuilder.Build()
 	spawnLocation.Color = Color3.fromRGB(255, 215, 60)
 	spawnLocation.Duration = 0
 	spawnLocation.TopSurface = Enum.SurfaceType.Smooth
-	spawnLocation.Parent = mapFolder
+	spawnLocation.Parent = spawnsFolder
 	addLabel(spawnLocation, "Spawn")
 
 	local clickOrb = newPart({
@@ -137,7 +166,7 @@ function MapBuilder.Build()
 		Position = FARM_CENTER + Vector3.new(0, 4, 0),
 		Material = Enum.Material.Neon,
 		Color = Color3.fromRGB(255, 200, 40),
-		Parent = mapFolder,
+		Parent = interactivesFolder,
 	})
 	addLabel(clickOrb, "Click Point")
 
@@ -147,7 +176,7 @@ function MapBuilder.Build()
 		Position = FARM_CENTER + Vector3.new(30, 1, -60),
 		Material = Enum.Material.Neon,
 		Color = Color3.fromRGB(160, 60, 220),
-		Parent = mapFolder,
+		Parent = interactivesFolder,
 	})
 	addLabel(altar, "Rebirth Altar")
 
@@ -161,10 +190,14 @@ function MapBuilder.Build()
 	end
 
 	local eggParts = {}
-	for id, part in pairs(buildEggMarkers(mapFolder, farmEggs, FARM_CENTER + Vector3.new(-25, 0, -70), DESERT_CENTER)) do
+	local farmEggMarkers =
+		buildEggMarkers(interactivesFolder, farmEggs, FARM_CENTER + Vector3.new(-25, 0, -70), DESERT_CENTER)
+	for id, part in pairs(farmEggMarkers) do
 		eggParts[id] = part
 	end
-	for id, part in pairs(buildEggMarkers(mapFolder, desertEggs, DESERT_CENTER + Vector3.new(0, 0, -35), FARM_CENTER)) do
+	local desertEggMarkers =
+		buildEggMarkers(interactivesFolder, desertEggs, DESERT_CENTER + Vector3.new(0, 0, -35), FARM_CENTER)
+	for id, part in pairs(desertEggMarkers) do
 		eggParts[id] = part
 	end
 
@@ -172,6 +205,7 @@ function MapBuilder.Build()
 		ClickOrb = clickOrb,
 		RebirthAltar = altar,
 		EggParts = eggParts,
+		DesertDoor = desertDoor,
 	}
 end
 

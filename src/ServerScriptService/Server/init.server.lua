@@ -38,6 +38,7 @@ local EquipPetRemote = createRemoteEvent("EquipPet")
 local UnequipPetRemote = createRemoteEvent("UnequipPet")
 local FusePetsRemote = createRemoteEvent("FusePets")
 local EggResultRemote = createRemoteEvent("EggResult")
+local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
 
 local lastClickTimes = {}
 
@@ -390,6 +391,58 @@ for eggId, eggPart in pairs(mapRefs.EggParts) do
 		handleHatchEgg(player, eggId)
 	end)
 end
+
+-- ===== Desert zone gate (physical rebirth-gated barrier) =====
+-- The barrier stays solid by default so it blocks everyone. A qualifying
+-- player briefly opens it (CanCollide off) and it re-locks itself shortly
+-- after -- toggling it permanently would unlock it for every other player
+-- on the server forever, which is wrong for a shared multiplayer gate.
+
+local zoneLockedCooldown = {}
+
+mapRefs.DesertDoor.Touched:Connect(function(hit)
+	local character = hit.Parent
+	local player = Players:GetPlayerFromCharacter(character)
+	if not player then
+		return
+	end
+
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+
+	if data.RebirthCount >= GameConfig.DesertZoneRequiredRebirths then
+		if not mapRefs.DesertDoor.CanCollide then
+			return
+		end
+		mapRefs.DesertDoor.CanCollide = false
+		mapRefs.DesertDoor.Transparency = 0.85
+		task.delay(1, function()
+			mapRefs.DesertDoor.CanCollide = true
+			mapRefs.DesertDoor.Transparency = 0.5
+		end)
+		return
+	end
+
+	if zoneLockedCooldown[player.UserId] then
+		return
+	end
+	zoneLockedCooldown[player.UserId] = true
+	task.delay(0.5, function()
+		zoneLockedCooldown[player.UserId] = nil
+	end)
+
+	ZoneLockedRemote:FireClient(player, GameConfig.DesertZoneRequiredRebirths)
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if rootPart then
+		local delta = rootPart.Position - mapRefs.DesertDoor.Position
+		delta = Vector3.new(delta.X, 0, delta.Z)
+		local pushDirection = if delta.Magnitude > 0 then delta.Unit else Vector3.new(0, 0, 1)
+		rootPart.CFrame = rootPart.CFrame + pushDirection * 6
+	end
+end)
 
 -- ===== Passive income (auto-clickers) =====
 

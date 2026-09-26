@@ -24,6 +24,7 @@ local EquipPetRemote = Remotes:WaitForChild("EquipPet")
 local UnequipPetRemote = Remotes:WaitForChild("UnequipPet")
 local FusePetsRemote = Remotes:WaitForChild("FusePets")
 local EggResultRemote = Remotes:WaitForChild("EggResult")
+local ZoneLockedRemote = Remotes:WaitForChild("ZoneLocked")
 
 local currentData = {
 	Coins = 0,
@@ -831,6 +832,54 @@ end)
 
 EggResultRemote.OnClientEvent:Connect(function(pet)
 	showPetReveal(pet)
+end)
+
+-- Simple fading banner for brief status messages (e.g. a locked zone gate).
+local toastFrame = Instance.new("Frame")
+toastFrame.Name = "ToastFrame"
+toastFrame.AnchorPoint = Vector2.new(0.5, 0)
+toastFrame.Position = UDim2.new(0.5, 0, 0.14, 0)
+toastFrame.Size = UDim2.new(0, 420, 0, 50)
+toastFrame.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
+toastFrame.BackgroundTransparency = 1
+toastFrame.Parent = screenGui
+
+Instance.new("UICorner", toastFrame).CornerRadius = UDim.new(0, 10)
+
+local toastLabel = Instance.new("TextLabel")
+toastLabel.BackgroundTransparency = 1
+toastLabel.Size = UDim2.new(1, -20, 1, 0)
+toastLabel.Position = UDim2.new(0, 10, 0, 0)
+toastLabel.Font = Enum.Font.GothamBold
+toastLabel.TextScaled = true
+toastLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+toastLabel.TextTransparency = 1
+toastLabel.Text = ""
+toastLabel.Parent = toastFrame
+
+local toastToken = 0
+local function showToast(text)
+	toastToken += 1
+	local myToken = toastToken
+
+	toastLabel.Text = text
+	TweenService:Create(toastFrame, TweenInfo.new(0.15), { BackgroundTransparency = 0.15 }):Play()
+	TweenService:Create(toastLabel, TweenInfo.new(0.15), { TextTransparency = 0 }):Play()
+
+	task.delay(2.2, function()
+		if myToken ~= toastToken then
+			return
+		end
+		TweenService:Create(toastFrame, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(toastLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+	end)
+end
+
+ZoneLockedRemote.OnClientEvent:Connect(function(requiredRebirths)
+	showToast(("Locked! Need %d Rebirth%s to enter the Desert Zone"):format(
+		requiredRebirths,
+		requiredRebirths == 1 and "" or "s"
+	))
 end)
 
 refreshUI()

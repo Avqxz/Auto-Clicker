@@ -110,6 +110,11 @@ GameConfig.Rebirth = {
 	MultiplierPerRebirth = 0.5, -- +50% coin gain per rebirth
 }
 
+-- Rebirths needed to physically pass the Desert zone gate (matches the
+-- Golden Egg's own RequiredRebirths, but kept separate/explicit so the
+-- zone barrier isn't silently coupled to one particular egg's config).
+GameConfig.DesertZoneRequiredRebirths = 1
+
 -- ===== Pets & eggs =====
 
 GameConfig.BaseMaxEquippedPets = 3
