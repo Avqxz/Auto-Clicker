@@ -1,8 +1,11 @@
 -- Procedurally builds the game's map on server start: a Farm zone (ground,
 -- spawn, click plaza, rebirth altar, Basic Egg hatchery) connected by a path
--- to a Desert zone (sand terrain, Golden Egg hatchery). Everything is
--- generated in code (no binary mesh/place assets) so it can live in a git
--- repo and sync entirely through Rojo.
+-- to a Desert zone (sand terrain, Golden Egg hatchery). Styled after
+-- low-poly fantasy pet-sim aesthetics: layered pyramid-canopy trees, small
+-- peaked-roof buildings, glowing glass egg pods, magic-circle glow pads, and
+-- a distant mountain backdrop. Everything is generated in code (no binary
+-- mesh/place assets) so it can live in a git repo and sync entirely through
+-- Rojo.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
@@ -16,6 +19,18 @@ local FARM_RADIUS = 150
 
 local DESERT_CENTER = Vector3.new(0, 0, -450)
 local DESERT_RADIUS = 100
+
+local MOUNTAIN_COLORS_FARM = {
+	Color3.fromRGB(190, 150, 210),
+	Color3.fromRGB(160, 120, 190),
+	Color3.fromRGB(210, 180, 225),
+}
+
+local MOUNTAIN_COLORS_DESERT = {
+	Color3.fromRGB(150, 110, 90),
+	Color3.fromRGB(175, 130, 100),
+	Color3.fromRGB(130, 95, 80),
+}
 
 local function newPart(props)
 	local p = Instance.new("Part")
@@ -48,20 +63,193 @@ local function addSign(parent, text, offsetY, color)
 	return billboard
 end
 
--- A ring of posts around `center` with a gap left open facing `gapAngle` (radians)
--- so a connecting path isn't blocked.
+-- Three stacked pyramid tiers on a trunk, for a faceted low-poly pine tree look.
+local function buildPineTree(mapFolder, position)
+	local trunkHeight = 6
+	newPart({
+		Name = "TreeTrunk",
+		Size = Vector3.new(1.6, trunkHeight, 1.6),
+		Position = position + Vector3.new(0, trunkHeight / 2, 0),
+		Material = Enum.Material.Wood,
+		Color = Color3.fromRGB(85, 60, 45),
+		Parent = mapFolder,
+	})
+
+	local tierSizes = { 11, 8.5, 6 }
+	local tierHeights = { 6, 5, 4 }
+	local y = trunkHeight * 0.5
+	for i, size in ipairs(tierSizes) do
+		local height = tierHeights[i]
+		local canopy = newPart({
+			Name = "TreeCanopy",
+			Size = Vector3.new(size, height, size),
+			Position = position + Vector3.new(0, y + height / 2, 0),
+			Material = Enum.Material.Grass,
+			Color = Color3.fromRGB(40, 130, 65),
+			CanCollide = false,
+			Parent = mapFolder,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Pyramid
+		mesh.Parent = canopy
+		y += height * 0.55
+	end
+end
+
+-- Small decorative building: block walls, a pyramid roof, and a glowing window.
+local function buildHatcheryBuilding(mapFolder, position, yRotation, roofColor, wallColor, windowColor)
+	local baseCFrame = CFrame.new(position) * CFrame.Angles(0, yRotation, 0)
+	local width, depth, wallHeight = 10, 8, 9
+
+	newPart({
+		Name = "BuildingWalls",
+		Size = Vector3.new(width, wallHeight, depth),
+		CFrame = baseCFrame * CFrame.new(0, wallHeight / 2, 0),
+		Material = Enum.Material.WoodPlanks,
+		Color = wallColor,
+		Parent = mapFolder,
+	})
+
+	local roofPart = newPart({
+		Name = "BuildingRoof",
+		Size = Vector3.new(width + 2, 5, depth + 2),
+		CFrame = baseCFrame * CFrame.new(0, wallHeight + 2.5, 0),
+		Material = Enum.Material.Wood,
+		Color = roofColor,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+	local roofMesh = Instance.new("SpecialMesh")
+	roofMesh.MeshType = Enum.MeshType.Pyramid
+	roofMesh.Parent = roofPart
+
+	newPart({
+		Name = "Window",
+		Size = Vector3.new(1.6, 2, 0.4),
+		CFrame = baseCFrame * CFrame.new(0, wallHeight * 0.55, depth / 2 + 0.05),
+		Material = Enum.Material.Neon,
+		Color = windowColor,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+end
+
+-- A translucent "glass" egg on a pedestal with a glowing pad underneath. Returns the egg part.
+local function buildGlowingEggPod(mapFolder, name, position, podColor)
+	newPart({
+		Name = name .. "_Pedestal",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(2, 5, 5),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position,
+		Material = Enum.Material.Marble,
+		Color = Color3.fromRGB(235, 235, 240),
+		Parent = mapFolder,
+	})
+
+	newPart({
+		Name = name .. "_GlowPad",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.3, 6.4, 6.4),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position + Vector3.new(0, 1.2, 0),
+		Material = Enum.Material.Neon,
+		Color = podColor,
+		Transparency = 0.35,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+
+	local pod = newPart({
+		Name = name,
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(5, 6, 5),
+		Position = position + Vector3.new(0, 6, 0),
+		Material = Enum.Material.Glass,
+		Color = podColor,
+		Transparency = 0.35,
+		Parent = mapFolder,
+	})
+
+	return pod
+end
+
+-- A flat glowing disc, for magic-circle-style ground accents.
+local function addGlowPad(mapFolder, position, radius, color)
+	newPart({
+		Name = "GlowPad",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.2, radius * 2, radius * 2),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position,
+		Material = Enum.Material.Neon,
+		Color = color,
+		Transparency = 0.5,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+end
+
+-- Scattered distant low-poly mountains (pyramid meshes) as a non-collidable backdrop.
+local function buildMountainBackdrop(mapFolder, center, innerRadius, rng, colorPalette)
+	for _ = 1, 10 do
+		local angle = rng:NextNumber() * math.pi * 2
+		local radius = innerRadius + rng:NextNumber() * 80
+		local x = center.X + math.cos(angle) * radius
+		local z = center.Z + math.sin(angle) * radius
+		local height = 60 + rng:NextNumber() * 60
+		local width = 40 + rng:NextNumber() * 30
+
+		local mountain = newPart({
+			Name = "Mountain",
+			Size = Vector3.new(width, height, width),
+			Position = Vector3.new(x, height / 2 - 10, z),
+			Orientation = Vector3.new(0, rng:NextNumber() * 360, 0),
+			Material = Enum.Material.Slate,
+			Color = colorPalette[rng:NextInteger(1, #colorPalette)],
+			CanCollide = false,
+			CanQuery = false,
+			Parent = mapFolder,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Pyramid
+		mesh.Parent = mountain
+	end
+end
+
+-- A ring of posts (with connecting rails) around `center`, with a gap left open
+-- facing `gapAngle` (radians) so a connecting path isn't blocked.
 local function buildFenceRing(mapFolder, center, radius, postCount, color, gapAngle)
+	local postPositions = {}
 	for i = 1, postCount do
 		local angle = (i / postCount) * math.pi * 2
 		if not gapAngle or math.abs(angle - gapAngle) > math.rad(20) then
+			local pos = center + Vector3.new(math.cos(angle) * radius, 3, math.sin(angle) * radius)
 			newPart({
 				Name = "FencePost",
 				Size = Vector3.new(2, 8, 2),
-				Position = center + Vector3.new(math.cos(angle) * radius, 3, math.sin(angle) * radius),
+				Position = pos,
 				Material = Enum.Material.Wood,
 				Color = color,
 				Parent = mapFolder,
 			})
+			postPositions[i] = pos
+		end
+	end
+
+	for i = 1, postCount do
+		local a, b = postPositions[i], postPositions[i + 1]
+		if a and b and (a - b).Magnitude < radius then
+			local mid = (a + b) / 2 + Vector3.new(0, 1, 0)
+			local rail = newPart({
+				Name = "FenceRail",
+				Size = Vector3.new(1, 1, (a - b).Magnitude),
+				Material = Enum.Material.Wood,
+				Color = color,
+				CanCollide = false,
+				Parent = mapFolder,
+			})
+			rail.CFrame = CFrame.new(mid, b + Vector3.new(0, 1, 0))
 		end
 	end
 end
@@ -86,52 +274,53 @@ local function buildEggStalls(mapFolder, eggs, center, facingCenter)
 		local offset = Vector3.new(math.sin(angle) * radius, 0, math.cos(angle) * radius)
 		local position = center + offset
 
-		local stallColor = if egg.RequiredRebirths > 0 then Color3.fromRGB(210, 170, 40) else Color3.fromRGB(120, 90, 60)
+		local podColor = if egg.RequiredRebirths > 0 then Color3.fromRGB(255, 200, 90) else Color3.fromRGB(130, 220, 255)
 
 		newPart({
 			Name = egg.Id .. "_Stand",
-			Size = Vector3.new(9, 3, 9),
-			Position = Vector3.new(position.X, 1.5, position.Z),
+			Size = Vector3.new(11, 2, 11),
+			Position = Vector3.new(position.X, 1, position.Z),
 			Material = Enum.Material.Wood,
-			Color = stallColor,
+			Color = Color3.fromRGB(110, 80, 55),
 			Parent = mapFolder,
 		})
 
-		local eggPart = newPart({
-			Name = egg.Id,
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(5, 6, 5),
-			Position = Vector3.new(position.X, 6.5, position.Z),
-			Material = Enum.Material.SmoothPlastic,
-			Color = stallColor,
-			Parent = mapFolder,
-		})
-		addSign(eggPart, egg.Name .. "\n" .. tostring(egg.Cost) .. " coins", 5, Color3.fromRGB(255, 255, 255))
+		local pod = buildGlowingEggPod(mapFolder, egg.Id, Vector3.new(position.X, 2, position.Z), podColor)
+		addSign(pod, egg.Name .. "\n" .. tostring(egg.Cost) .. " coins", 5, Color3.fromRGB(255, 255, 255))
 
-		eggParts[egg.Id] = eggPart
+		eggParts[egg.Id] = pod
 	end
 
 	return eggParts
 end
 
 local function buildLighting()
-	Lighting.Brightness = 2
-	Lighting.ClockTime = 14
-	Lighting.Ambient = Color3.fromRGB(90, 90, 100)
-	Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
-	Lighting.FogEnd = 900
+	Lighting.Brightness = 2.2
+	Lighting.ClockTime = 13
+	Lighting.Ambient = Color3.fromRGB(100, 95, 115)
+	Lighting.OutdoorAmbient = Color3.fromRGB(165, 160, 180)
+	Lighting.FogEnd = 950
 
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
 	if not atmosphere then
 		atmosphere = Instance.new("Atmosphere")
 		atmosphere.Parent = Lighting
 	end
-	atmosphere.Density = 0.3
-	atmosphere.Offset = 0.25
-	atmosphere.Color = Color3.fromRGB(210, 220, 255)
-	atmosphere.Decay = Color3.fromRGB(90, 100, 140)
-	atmosphere.Glare = 0.2
-	atmosphere.Haze = 1.2
+	atmosphere.Density = 0.28
+	atmosphere.Offset = 0.2
+	atmosphere.Color = Color3.fromRGB(220, 215, 255)
+	atmosphere.Decay = Color3.fromRGB(120, 110, 170)
+	atmosphere.Glare = 0.25
+	atmosphere.Haze = 1
+
+	local colorCorrection = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	if not colorCorrection then
+		colorCorrection = Instance.new("ColorCorrectionEffect")
+		colorCorrection.Parent = Lighting
+	end
+	colorCorrection.Saturation = 0.25
+	colorCorrection.Contrast = 0.08
+	colorCorrection.Brightness = 0.02
 end
 
 local function buildFarmZone(mapFolder, eggs)
@@ -180,6 +369,8 @@ local function buildFarmZone(mapFolder, eggs)
 		Parent = mapFolder,
 	})
 
+	addGlowPad(mapFolder, FARM_CENTER + Vector3.new(0, 6.6, 0), 5.5, Color3.fromRGB(255, 210, 90))
+
 	local clickOrb = newPart({
 		Name = "ClickOrb",
 		Shape = Enum.PartType.Ball,
@@ -201,38 +392,44 @@ local function buildFarmZone(mapFolder, eggs)
 		Parent = mapFolder,
 	})
 	addSign(altar, "REBIRTH ALTAR", 4, Color3.fromRGB(200, 120, 255))
+	addGlowPad(mapFolder, FARM_CENTER + Vector3.new(30, 2.1, -60), 7, Color3.fromRGB(180, 100, 255))
 
 	-- Basic Egg hatchery, arced toward the desert path (south side)
 	local eggParts = buildEggStalls(mapFolder, eggs, FARM_CENTER + Vector3.new(-25, 0, -70), DESERT_CENTER)
 
+	-- Decorative village buildings flanking the spawn path
+	buildHatcheryBuilding(
+		mapFolder,
+		FARM_CENTER + Vector3.new(-45, 0, 15),
+		math.rad(200),
+		Color3.fromRGB(200, 60, 60),
+		Color3.fromRGB(60, 55, 70),
+		Color3.fromRGB(255, 200, 80)
+	)
+	buildHatcheryBuilding(
+		mapFolder,
+		FARM_CENTER + Vector3.new(45, 0, 15),
+		math.rad(160),
+		Color3.fromRGB(70, 130, 200),
+		Color3.fromRGB(55, 60, 75),
+		Color3.fromRGB(120, 220, 255)
+	)
+
 	-- Border fence, gap facing south toward the Desert path
 	buildFenceRing(mapFolder, FARM_CENTER, FARM_RADIUS, 24, Color3.fromRGB(90, 60, 40), math.rad(270))
 
-	-- Scattered trees outside the plaza
+	-- Scattered pine trees outside the plaza
 	local rng = Random.new(42)
 	for _ = 1, 24 do
 		local x = (rng:NextNumber() - 0.5) * 290
 		local z = (rng:NextNumber() - 0.5) * 290
 		if Vector2.new(x, z).Magnitude > 60 then
-			newPart({
-				Name = "TreeTrunk",
-				Size = Vector3.new(2, 8, 2),
-				Position = FARM_CENTER + Vector3.new(x, 4, z),
-				Material = Enum.Material.Wood,
-				Color = Color3.fromRGB(90, 60, 40),
-				Parent = mapFolder,
-			})
-			newPart({
-				Name = "TreeLeaves",
-				Shape = Enum.PartType.Ball,
-				Size = Vector3.new(10, 10, 10),
-				Position = FARM_CENTER + Vector3.new(x, 10, z),
-				Material = Enum.Material.Grass,
-				Color = Color3.fromRGB(60, 140, 60),
-				Parent = mapFolder,
-			})
+			buildPineTree(mapFolder, FARM_CENTER + Vector3.new(x, 0, z))
 		end
 	end
+
+	-- Distant mountain backdrop
+	buildMountainBackdrop(mapFolder, FARM_CENTER, FARM_RADIUS + 40, Random.new(101), MOUNTAIN_COLORS_FARM)
 
 	return {
 		ClickOrb = clickOrb,
@@ -291,6 +488,28 @@ local function buildDesertZone(mapFolder, eggs)
 			})
 		end
 	end
+
+	-- Glowing volcanic cracks, echoing the lava-zone reference art
+	for _ = 1, 6 do
+		local x = (rng:NextNumber() - 0.5) * 170
+		local z = (rng:NextNumber() - 0.5) * 170
+		if Vector2.new(x, z).Magnitude > 45 then
+			newPart({
+				Name = "LavaCrack",
+				Size = Vector3.new(1 + rng:NextNumber() * 2, 0.15, 6 + rng:NextNumber() * 6),
+				Orientation = Vector3.new(0, rng:NextNumber() * 360, 0),
+				Position = DESERT_CENTER + Vector3.new(x, 0.1, z),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 130, 40),
+				Transparency = 0.15,
+				CanCollide = false,
+				Parent = mapFolder,
+			})
+		end
+	end
+
+	-- Distant mountain backdrop
+	buildMountainBackdrop(mapFolder, DESERT_CENTER, DESERT_RADIUS + 30, Random.new(202), MOUNTAIN_COLORS_DESERT)
 
 	return {
 		EggParts = eggParts,
