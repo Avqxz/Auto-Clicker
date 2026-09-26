@@ -692,6 +692,14 @@ function MapBuilder.Build()
 		existing:Destroy()
 	end
 
+	-- Remove the default "Baseplate" template part if present, since it
+	-- overlaps our own FarmGround at nearly the same height and causes
+	-- z-fighting / lets the player spawn on the wrong surface.
+	local defaultBaseplate = workspace:FindFirstChild("Baseplate")
+	if defaultBaseplate and defaultBaseplate:IsA("BasePart") then
+		defaultBaseplate:Destroy()
+	end
+
 	local mapFolder = Instance.new("Folder")
 	mapFolder.Name = "Map"
 	mapFolder.Parent = workspace
