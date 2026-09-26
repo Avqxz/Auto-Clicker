@@ -21,15 +21,22 @@ local DESERT_CENTER = Vector3.new(0, 0, -450)
 local DESERT_RADIUS = 100
 
 local MOUNTAIN_COLORS_FARM = {
-	Color3.fromRGB(190, 150, 210),
-	Color3.fromRGB(160, 120, 190),
-	Color3.fromRGB(210, 180, 225),
+	Color3.fromRGB(230, 90, 170),
+	Color3.fromRGB(190, 80, 210),
+	Color3.fromRGB(160, 70, 200),
 }
 
 local MOUNTAIN_COLORS_DESERT = {
-	Color3.fromRGB(150, 110, 90),
-	Color3.fromRGB(175, 130, 100),
-	Color3.fromRGB(130, 95, 80),
+	Color3.fromRGB(220, 100, 150),
+	Color3.fromRGB(190, 90, 160),
+	Color3.fromRGB(170, 80, 140),
+}
+
+local DECOR_EGG_COLORS = {
+	Color3.fromRGB(190, 90, 220),
+	Color3.fromRGB(255, 90, 180),
+	Color3.fromRGB(90, 220, 140),
+	Color3.fromRGB(255, 210, 60),
 }
 
 local function newPart(props)
@@ -71,7 +78,7 @@ local function buildPineTree(mapFolder, position)
 		Size = Vector3.new(1.6, trunkHeight, 1.6),
 		Position = position + Vector3.new(0, trunkHeight / 2, 0),
 		Material = Enum.Material.Wood,
-		Color = Color3.fromRGB(85, 60, 45),
+		Color = Color3.fromRGB(120, 35, 45),
 		Parent = mapFolder,
 	})
 
@@ -85,7 +92,7 @@ local function buildPineTree(mapFolder, position)
 			Size = Vector3.new(size, height, size),
 			Position = position + Vector3.new(0, y + height / 2, 0),
 			Material = Enum.Material.Grass,
-			Color = Color3.fromRGB(40, 130, 65),
+			Color = Color3.fromRGB(20, 110, 55),
 			CanCollide = false,
 			Parent = mapFolder,
 		})
@@ -172,6 +179,102 @@ local function buildGlowingEggPod(mapFolder, name, position, podColor)
 	})
 
 	return pod
+end
+
+-- A small purely-decorative glass egg (no gameplay function) used to fill out a
+-- colorful row next to the real hatchery pod, echoing multi-colored egg displays.
+local function buildDecorEggPod(mapFolder, position, color, scale)
+	newPart({
+		Name = "DecorEggPedestal",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1, 2.4 * scale, 2.4 * scale),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position,
+		Material = Enum.Material.Wood,
+		Color = Color3.fromRGB(90, 65, 45),
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+
+	newPart({
+		Name = "DecorEgg",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(2.6 * scale, 3.4 * scale, 2.6 * scale),
+		Position = position + Vector3.new(0, 2.2 * scale, 0),
+		Material = Enum.Material.Glass,
+		Color = color,
+		Transparency = 0.3,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+end
+
+-- Small glowing teal spike accents scattered on the ground for extra color detail.
+local function scatterGrassTufts(mapFolder, center, count, spreadRadius, rng)
+	for _ = 1, count do
+		local x = (rng:NextNumber() - 0.5) * spreadRadius * 2
+		local z = (rng:NextNumber() - 0.5) * spreadRadius * 2
+		if Vector2.new(x, z).Magnitude < spreadRadius then
+			local tuft = newPart({
+				Name = "GrassTuft",
+				Size = Vector3.new(1, 2 + rng:NextNumber(), 1),
+				Position = center + Vector3.new(x, 1, z),
+				Orientation = Vector3.new(0, rng:NextNumber() * 360, 0),
+				Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(60, 200, 190),
+				CanCollide = false,
+				CanQuery = false,
+				Parent = mapFolder,
+			})
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Pyramid
+			mesh.Parent = tuft
+		end
+	end
+end
+
+-- A thin pole with a glowing top, for path lighting accents.
+local function buildLampPost(mapFolder, position)
+	newPart({
+		Name = "LampPost",
+		Size = Vector3.new(0.8, 10, 0.8),
+		Position = position + Vector3.new(0, 5, 0),
+		Material = Enum.Material.Metal,
+		Color = Color3.fromRGB(70, 70, 90),
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+
+	newPart({
+		Name = "LampGlow",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(2, 2, 2),
+		Position = position + Vector3.new(0, 10, 0),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(120, 200, 255),
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+end
+
+-- A larger, bolder neon BillboardGui sign (vs. addSign's compact info labels).
+local function addBigNeonSign(parent, text, offsetY, color)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Size = UDim2.new(0, 260, 0, 90)
+	billboard.StudsOffset = Vector3.new(0, offsetY, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.TextStrokeTransparency = 0
+	label.TextStrokeColor3 = Color3.fromRGB(10, 10, 30)
+	label.Text = text
+	label.Parent = billboard
 end
 
 -- A flat glowing disc, for magic-circle-style ground accents.
@@ -287,6 +390,20 @@ local function buildEggStalls(mapFolder, eggs, center, facingCenter)
 
 		local pod = buildGlowingEggPod(mapFolder, egg.Id, Vector3.new(position.X, 2, position.Z), podColor)
 		addSign(pod, egg.Name .. "\n" .. tostring(egg.Cost) .. " coins", 5, Color3.fromRGB(255, 255, 255))
+
+		-- Row of small decorative multi-colored eggs beside the real hatchery pod.
+		local dir = Vector3.new(math.sin(angle), 0, math.cos(angle))
+		local sideDir = Vector3.new(math.cos(angle), 0, -math.sin(angle))
+		local rowCenter = position + dir * 9
+		for j = 1, #DECOR_EGG_COLORS do
+			local decorOffset = sideDir * ((j - (#DECOR_EGG_COLORS + 1) / 2) * 4)
+			local decorPos = rowCenter + decorOffset
+			buildDecorEggPod(mapFolder, Vector3.new(decorPos.X, 1, decorPos.Z), DECOR_EGG_COLORS[j], 0.6)
+		end
+
+		if i == 1 then
+			addBigNeonSign(pod, "EGGS", 9, Color3.fromRGB(80, 220, 255))
+		end
 
 		eggParts[egg.Id] = pod
 	end
@@ -428,6 +545,9 @@ local function buildFarmZone(mapFolder, eggs)
 		end
 	end
 
+	-- Small glowing teal accent tufts
+	scatterGrassTufts(mapFolder, FARM_CENTER, 40, 140, Random.new(303))
+
 	-- Distant mountain backdrop
 	buildMountainBackdrop(mapFolder, FARM_CENTER, FARM_RADIUS + 40, Random.new(101), MOUNTAIN_COLORS_FARM)
 
@@ -520,16 +640,38 @@ local function buildPath(mapFolder)
 	local farmEdgeZ = FARM_CENTER.Z - FARM_RADIUS
 	local desertEdgeZ = DESERT_CENTER.Z + DESERT_RADIUS
 	local length = farmEdgeZ - desertEdgeZ
-	local midZ = (farmEdgeZ + desertEdgeZ) / 2
+	local width = 16
+	local tileSize = 8
 
-	newPart({
-		Name = "DesertPath",
-		Size = Vector3.new(16, 1, length),
-		Position = Vector3.new(0, 0.5, midZ),
-		Material = Enum.Material.Sandstone,
-		Color = Color3.fromRGB(195, 170, 130),
-		Parent = mapFolder,
-	})
+	-- Checkered path tiles instead of one flat color
+	local tilesZ = math.ceil(length / tileSize)
+	local tilesX = math.ceil(width / tileSize)
+	local colorA = Color3.fromRGB(235, 110, 130)
+	local colorB = Color3.fromRGB(215, 90, 110)
+	for row = 0, tilesZ - 1 do
+		for col = 0, tilesX - 1 do
+			local isAlt = (row + col) % 2 == 0
+			newPart({
+				Name = "PathTile",
+				Size = Vector3.new(tileSize, 1, tileSize),
+				Position = Vector3.new(
+					-width / 2 + col * tileSize + tileSize / 2,
+					0.5,
+					desertEdgeZ + row * tileSize + tileSize / 2
+				),
+				Material = Enum.Material.SmoothPlastic,
+				Color = if isAlt then colorA else colorB,
+				Parent = mapFolder,
+			})
+		end
+	end
+
+	-- Lamp posts flanking the path
+	for i = 1, math.floor(length / 40) do
+		local z = farmEdgeZ - i * 40
+		buildLampPost(mapFolder, Vector3.new(width / 2 + 2, 0, z))
+		buildLampPost(mapFolder, Vector3.new(-width / 2 - 2, 0, z))
+	end
 
 	-- Gate marker at the Desert entrance
 	local gate = newPart({
