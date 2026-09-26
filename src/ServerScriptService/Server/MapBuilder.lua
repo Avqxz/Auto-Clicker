@@ -108,7 +108,7 @@ local function buildHatcheryBuilding(mapFolder, position, yRotation, roofColor, 
 	local baseCFrame = CFrame.new(position) * CFrame.Angles(0, yRotation, 0)
 	local width, depth, wallHeight = 10, 8, 9
 
-	newPart({
+	local wallsPart = newPart({
 		Name = "BuildingWalls",
 		Size = Vector3.new(width, wallHeight, depth),
 		CFrame = baseCFrame * CFrame.new(0, wallHeight / 2, 0),
@@ -139,6 +139,8 @@ local function buildHatcheryBuilding(mapFolder, position, yRotation, roofColor, 
 		CanCollide = false,
 		Parent = mapFolder,
 	})
+
+	return wallsPart
 end
 
 -- A translucent "glass" egg on a pedestal with a glowing pad underneath. Returns the egg part.
@@ -275,6 +277,118 @@ local function addBigNeonSign(parent, text, offsetY, color)
 	label.TextStrokeColor3 = Color3.fromRGB(10, 10, 30)
 	label.Text = text
 	label.Parent = billboard
+end
+
+-- Small toadstool prop: white stem + a colored cap.
+local function buildMushroom(mapFolder, position, capColor, scale)
+	scale = scale or 1
+	newPart({
+		Name = "MushroomStem",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.6 * scale, 0.7 * scale, 0.7 * scale),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position + Vector3.new(0, 0.8 * scale, 0),
+		Material = Enum.Material.SmoothPlastic,
+		Color = Color3.fromRGB(240, 235, 220),
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+
+	local cap = newPart({
+		Name = "MushroomCap",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(2.2 * scale, 1.3 * scale, 2.2 * scale),
+		Position = position + Vector3.new(0, 1.5 * scale, 0),
+		Material = Enum.Material.SmoothPlastic,
+		Color = capColor,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+	return cap
+end
+
+-- Small rounded shrub prop made of two overlapping spheres.
+local function buildBush(mapFolder, position, scale)
+	scale = scale or 1
+	for _, yOffset in ipairs({ 0, 1.1 * scale }) do
+		newPart({
+			Name = "Bush",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(3.2 * scale, 2.6 * scale, 3.2 * scale),
+			Position = position + Vector3.new(0, 1.3 * scale + yOffset * 0.4, 0),
+			Material = Enum.Material.Grass,
+			Color = Color3.fromRGB(50, 150, 70),
+			CanCollide = false,
+			Parent = mapFolder,
+		})
+	end
+end
+
+-- A small central-hub landmark: a round basin with a glowing "water" column.
+local function buildFountain(mapFolder, position)
+	newPart({
+		Name = "FountainBasin",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(2, 14, 14),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position + Vector3.new(0, 1, 0),
+		Material = Enum.Material.Marble,
+		Color = Color3.fromRGB(230, 220, 235),
+		Parent = mapFolder,
+	})
+
+	newPart({
+		Name = "FountainWater",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.6, 11, 11),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position + Vector3.new(0, 1.6, 0),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(90, 190, 255),
+		Transparency = 0.25,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+
+	newPart({
+		Name = "FountainSpout",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(8, 2, 2),
+		Orientation = Vector3.new(0, 0, 90),
+		Position = position + Vector3.new(0, 6, 0),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(140, 210, 255),
+		Transparency = 0.2,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+end
+
+-- A glowing portal-style gate: two pillars with a translucent energy field between them.
+local function buildPortalGate(mapFolder, position, width, height, fieldColor, pillarColor)
+	for _, side in ipairs({ -1, 1 }) do
+		newPart({
+			Name = "GatePillar",
+			Size = Vector3.new(3, height, 3),
+			Position = position + Vector3.new(side * width / 2, height / 2, 0),
+			Material = Enum.Material.Sandstone,
+			Color = pillarColor,
+			Parent = mapFolder,
+		})
+	end
+
+	local field = newPart({
+		Name = "GateField",
+		Size = Vector3.new(width - 2, height - 2, 0.6),
+		Position = position + Vector3.new(0, height / 2, 0),
+		Material = Enum.Material.Neon,
+		Color = fieldColor,
+		Transparency = 0.45,
+		CanCollide = false,
+		Parent = mapFolder,
+	})
+
+	return field
 end
 
 -- A flat glowing disc, for magic-circle-style ground accents.
@@ -514,8 +628,11 @@ local function buildFarmZone(mapFolder, eggs)
 	-- Basic Egg hatchery, arced toward the desert path (south side)
 	local eggParts = buildEggStalls(mapFolder, eggs, FARM_CENTER + Vector3.new(-25, 0, -70), DESERT_CENTER)
 
-	-- Decorative village buildings flanking the spawn path
-	buildHatcheryBuilding(
+	-- Fountain landmark near spawn
+	buildFountain(mapFolder, FARM_CENTER + Vector3.new(22, 0, 25))
+
+	-- Decorative village buildings flanking the spawn path; the left one doubles as the Shop landmark
+	local shopWalls = buildHatcheryBuilding(
 		mapFolder,
 		FARM_CENTER + Vector3.new(-45, 0, 15),
 		math.rad(200),
@@ -523,6 +640,8 @@ local function buildFarmZone(mapFolder, eggs)
 		Color3.fromRGB(60, 55, 70),
 		Color3.fromRGB(255, 200, 80)
 	)
+	addBigNeonSign(shopWalls, "SHOP", 9, Color3.fromRGB(255, 200, 80))
+
 	buildHatcheryBuilding(
 		mapFolder,
 		FARM_CENTER + Vector3.new(45, 0, 15),
@@ -542,6 +661,29 @@ local function buildFarmZone(mapFolder, eggs)
 		local z = (rng:NextNumber() - 0.5) * 290
 		if Vector2.new(x, z).Magnitude > 60 then
 			buildPineTree(mapFolder, FARM_CENTER + Vector3.new(x, 0, z))
+		end
+	end
+
+	-- Scattered mushrooms and bushes for micro-prop variety
+	local propRng = Random.new(77)
+	local mushroomColors = { Color3.fromRGB(220, 60, 70), Color3.fromRGB(255, 150, 60), Color3.fromRGB(230, 90, 200) }
+	for _ = 1, 18 do
+		local x = (propRng:NextNumber() - 0.5) * 260
+		local z = (propRng:NextNumber() - 0.5) * 260
+		if Vector2.new(x, z).Magnitude > 55 then
+			buildMushroom(
+				mapFolder,
+				FARM_CENTER + Vector3.new(x, 0, z),
+				mushroomColors[propRng:NextInteger(1, #mushroomColors)],
+				0.8 + propRng:NextNumber() * 0.6
+			)
+		end
+	end
+	for _ = 1, 14 do
+		local x = (propRng:NextNumber() - 0.5) * 260
+		local z = (propRng:NextNumber() - 0.5) * 260
+		if Vector2.new(x, z).Magnitude > 55 then
+			buildBush(mapFolder, FARM_CENTER + Vector3.new(x, 0, z), 0.8 + propRng:NextNumber() * 0.5)
 		end
 	end
 
@@ -673,16 +815,16 @@ local function buildPath(mapFolder)
 		buildLampPost(mapFolder, Vector3.new(-width / 2 - 2, 0, z))
 	end
 
-	-- Gate marker at the Desert entrance
-	local gate = newPart({
-		Name = "DesertGate",
-		Size = Vector3.new(16, 10, 2),
-		Position = Vector3.new(0, 5, desertEdgeZ),
-		Material = Enum.Material.Sandstone,
-		Color = Color3.fromRGB(195, 170, 130),
-		Parent = mapFolder,
-	})
-	addSign(gate, "DESERT ZONE\nGolden Egg - Requires 1 Rebirth", 6, Color3.fromRGB(255, 220, 150))
+	-- Portal-style gate marking the Desert entrance
+	local gateField = buildPortalGate(
+		mapFolder,
+		Vector3.new(0, 0, desertEdgeZ),
+		16,
+		14,
+		Color3.fromRGB(255, 170, 90),
+		Color3.fromRGB(195, 170, 130)
+	)
+	addSign(gateField, "DESERT ZONE\nGolden Egg - Requires 1 Rebirth", 6, Color3.fromRGB(255, 220, 150))
 end
 
 -- Returns references to the interactive parts so init.server.lua can wire up ClickDetectors.
