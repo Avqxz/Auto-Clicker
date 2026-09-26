@@ -3,8 +3,22 @@
 local DataStoreService = game:GetService("DataStoreService")
 
 local PlayerData = {}
-PlayerData.Store = DataStoreService:GetDataStore("ClickingSimulator_PlayerData_v1")
 PlayerData.Cache = {}
+
+-- GetDataStore throws in an unpublished place (Studio testing with no real
+-- place/universe id) or when API access isn't enabled. Degrade gracefully
+-- instead of letting that crash the whole server script: fall back to
+-- in-memory-only data (no persistence) rather than erroring.
+local storeSuccess, storeOrError = pcall(function()
+	return DataStoreService:GetDataStore("ClickingSimulator_PlayerData_v1")
+end)
+
+if storeSuccess then
+	PlayerData.Store = storeOrError
+else
+	PlayerData.Store = nil
+	warn("[PlayerData] DataStore unavailable, progress will not be saved: " .. tostring(storeOrError))
+end
 
 local DEFAULT_DATA = {
 	Coins = 0,
@@ -38,17 +52,21 @@ end
 function PlayerData.Load(player)
 	local key = "Player_" .. player.UserId
 
-	local success, result = pcall(function()
-		return PlayerData.Store:GetAsync(key)
-	end)
-
 	local data
-	if success and result then
-		data = withDefaults(result)
-	else
-		if not success then
-			warn(("[PlayerData] Failed to load data for %s: %s"):format(player.Name, tostring(result)))
+	if PlayerData.Store then
+		local success, result = pcall(function()
+			return PlayerData.Store:GetAsync(key)
+		end)
+
+		if success and result then
+			data = withDefaults(result)
+		else
+			if not success then
+				warn(("[PlayerData] Failed to load data for %s: %s"):format(player.Name, tostring(result)))
+			end
+			data = deepCopy(DEFAULT_DATA)
 		end
+	else
 		data = deepCopy(DEFAULT_DATA)
 	end
 
@@ -61,6 +79,10 @@ function PlayerData.Get(player)
 end
 
 function PlayerData.Save(player)
+	if not PlayerData.Store then
+		return
+	end
+
 	local data = PlayerData.Cache[player.UserId]
 	if not data then
 		return
