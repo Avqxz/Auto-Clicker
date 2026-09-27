@@ -40,6 +40,7 @@ local UnequipPetRemote = createRemoteEvent("UnequipPet")
 local FusePetsRemote = createRemoteEvent("FusePets")
 local EggResultRemote = createRemoteEvent("EggResult")
 local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
+local PickStarterPetRemote = createRemoteEvent("PickStarterPet")
 
 local FeedbackRemote=createRemoteEvent("Feedback")
 local AnnouncementRemote=createRemoteEvent("Announcement")
@@ -270,6 +271,41 @@ local function handleHatchEgg(player, eggId)
 end
 
 HatchEggRemote.OnServerEvent:Connect(handleHatchEgg)
+
+PickStarterPetRemote.OnServerEvent:Connect(function(player, petName)
+	local data = PlayerData.Get(player)
+	if not data or data.HasPickedStarterPet then
+		return
+	end
+
+	local chosen
+	for _, starter in ipairs(GameConfig.StarterPets) do
+		if starter.Name == petName then
+			chosen = starter
+			break
+		end
+	end
+	if not chosen then
+		return
+	end
+
+	local uid = data.NextPetUid
+	data.NextPetUid += 1
+
+	local newPet = {
+		Uid = uid,
+		Name = chosen.Name,
+		Rarity = chosen.Rarity,
+		Multiplier = chosen.Multiplier,
+		Golden = false,
+	}
+	table.insert(data.Pets, newPet)
+	table.insert(data.EquippedPetUids, uid)
+	data.HasPickedStarterPet = true
+
+	pushData(player)
+	refreshFollowers(player, data)
+end)
 
 EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 	local data = PlayerData.Get(player)

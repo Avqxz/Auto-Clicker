@@ -104,6 +104,13 @@ GameConfig.AutoClickers = {
 	},
 }
 
+-- One-time choice of starting pet, offered to new players on their first join.
+GameConfig.StarterPets = {
+	{ Name = "Cat", Rarity = "Common", Multiplier = 1.1 },
+	{ Name = "Dog", Rarity = "Common", Multiplier = 1.1 },
+	{ Name = "Bunny", Rarity = "Common", Multiplier = 1.1 },
+}
+
 GameConfig.Rebirth = {
 	BaseRequirement = 1500,
 	RequirementMultiplier = 3,

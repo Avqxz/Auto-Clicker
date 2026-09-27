@@ -25,6 +25,7 @@ local UnequipPetRemote = Remotes:WaitForChild("UnequipPet")
 local FusePetsRemote = Remotes:WaitForChild("FusePets")
 local EggResultRemote = Remotes:WaitForChild("EggResult")
 local ZoneLockedRemote = Remotes:WaitForChild("ZoneLocked")
+local PickStarterPetRemote = Remotes:WaitForChild("PickStarterPet")
 
 local currentData = {
 	Coins = 0,
@@ -34,6 +35,7 @@ local currentData = {
 	RebirthCount = 0,
 	Pets = {},
 	EquippedPetUids = {},
+	HasPickedStarterPet = true, -- assume true until the server says otherwise, so the modal doesn't flash on load
 }
 
 -- ===== Helpers =====
@@ -821,6 +823,120 @@ local function showPetReveal(pet)
 	end)
 end
 
+-- ===== Starter pet selection (first-join onboarding) =====
+
+local starterPetFrame = Instance.new("Frame")
+starterPetFrame.Name = "StarterPetFrame"
+starterPetFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+starterPetFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+starterPetFrame.Size = UDim2.new(0, 460, 0, 320)
+starterPetFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+starterPetFrame.Visible = false
+starterPetFrame.Parent = screenGui
+
+Instance.new("UICorner", starterPetFrame).CornerRadius = UDim.new(0, 16)
+
+local starterTitle = Instance.new("TextLabel")
+starterTitle.BackgroundTransparency = 1
+starterTitle.Size = UDim2.new(1, 0, 0, 46)
+starterTitle.Font = Enum.Font.GothamBlack
+starterTitle.TextScaled = true
+starterTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+starterTitle.Text = "Select a Pet!"
+starterTitle.Parent = starterPetFrame
+
+local starterSubtitle = Instance.new("TextLabel")
+starterSubtitle.BackgroundTransparency = 1
+starterSubtitle.Position = UDim2.new(0, 0, 0, 44)
+starterSubtitle.Size = UDim2.new(1, 0, 0, 26)
+starterSubtitle.Font = Enum.Font.Gotham
+starterSubtitle.TextScaled = true
+starterSubtitle.TextColor3 = Color3.fromRGB(190, 190, 200)
+starterSubtitle.Text = "Choose a pet to begin with!"
+starterSubtitle.Parent = starterPetFrame
+
+local starterCardsHolder = Instance.new("Frame")
+starterCardsHolder.BackgroundTransparency = 1
+starterCardsHolder.Position = UDim2.new(0, 20, 0, 84)
+starterCardsHolder.Size = UDim2.new(1, -40, 0, 160)
+starterCardsHolder.Parent = starterPetFrame
+
+local starterLayout = Instance.new("UIListLayout")
+starterLayout.FillDirection = Enum.FillDirection.Horizontal
+starterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+starterLayout.Padding = UDim.new(0, 12)
+starterLayout.Parent = starterCardsHolder
+
+local selectedStarterPet = nil
+local starterCardStrokes = {}
+
+local pickButton = Instance.new("TextButton")
+pickButton.Name = "PickButton"
+pickButton.AnchorPoint = Vector2.new(0.5, 1)
+pickButton.Position = UDim2.new(0.5, 0, 1, -20)
+pickButton.Size = UDim2.new(0, 160, 0, 46)
+pickButton.BackgroundColor3 = Color3.fromRGB(60, 170, 100)
+pickButton.Font = Enum.Font.GothamBold
+pickButton.TextScaled = true
+pickButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+pickButton.Text = "Pick!"
+pickButton.Parent = starterPetFrame
+
+Instance.new("UICorner", pickButton).CornerRadius = UDim.new(0, 10)
+
+local function selectStarterPet(petName)
+	selectedStarterPet = petName
+	for name, stroke in pairs(starterCardStrokes) do
+		stroke.Transparency = if name == petName then 0 else 1
+	end
+end
+
+for _, starter in ipairs(GameConfig.StarterPets) do
+	local card = Instance.new("TextButton")
+	card.Name = starter.Name
+	card.Size = UDim2.new(0, 130, 0, 160)
+	card.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+	card.Text = ""
+	card.AutoButtonColor = false
+	card.Parent = starterCardsHolder
+
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
+
+	local cardStroke = Instance.new("UIStroke")
+	cardStroke.Thickness = 3
+	cardStroke.Color = Color3.fromRGB(60, 170, 100)
+	cardStroke.Transparency = 1
+	cardStroke.Parent = card
+	starterCardStrokes[starter.Name] = cardStroke
+
+	local viewport = createPetViewport({ Name = starter.Name, Rarity = starter.Rarity, Golden = false })
+	viewport.Size = UDim2.new(1, -16, 0, 110)
+	viewport.Position = UDim2.new(0, 8, 0, 8)
+	viewport.Parent = card
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Position = UDim2.new(0, 0, 1, -36)
+	nameLabel.Size = UDim2.new(1, 0, 0, 36)
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.Text = starter.Name
+	nameLabel.Parent = card
+
+	card.MouseButton1Click:Connect(function()
+		selectStarterPet(starter.Name)
+	end)
+end
+
+selectStarterPet(GameConfig.StarterPets[1].Name)
+
+pickButton.MouseButton1Click:Connect(function()
+	if selectedStarterPet then
+		PickStarterPetRemote:FireServer(selectedStarterPet)
+	end
+end)
+
 -- ===== Refresh loop =====
 
 local function refreshUI()
@@ -895,6 +1011,7 @@ end)
 
 DataUpdatedRemote.OnClientEvent:Connect(function(data)
 	currentData = data
+	starterPetFrame.Visible = not data.HasPickedStarterPet
 	refreshUI()
 end)
 
