@@ -73,10 +73,10 @@ GameConfig.AutoClickers = {
 	{
 		Id = "Auto1",
 		Name = "Clicking Bot",
-		Description = "+1 coin/second",
-		BaseCost = 50,
+		Description = "+2 coins/second",
+		BaseCost = 25,
 		CostMultiplier = 1.15,
-		CoinsPerSecond = 1,
+		CoinsPerSecond = 2,
 	},
 	{
 		Id = "Auto2",
@@ -105,15 +105,15 @@ GameConfig.AutoClickers = {
 }
 
 GameConfig.Rebirth = {
-	BaseRequirement = 10000,
+	BaseRequirement = 1500,
 	RequirementMultiplier = 3,
-	MultiplierPerRebirth = 0.5, -- +50% coin gain per rebirth
+	MultiplierPerRebirth = 1, -- +50% coin gain per rebirth
 }
 
--- Rebirths needed to physically pass the Desert zone gate (matches the
+-- Rebirths needed to pass the Frost World portal (matches the
 -- Golden Egg's own RequiredRebirths, but kept separate/explicit so the
 -- zone barrier isn't silently coupled to one particular egg's config).
-GameConfig.DesertZoneRequiredRebirths = 1
+GameConfig.FrostZoneRequiredRebirths = 1
 
 -- ===== Pets & eggs =====
 
@@ -134,9 +134,9 @@ GameConfig.Eggs = {
 	{
 		Id = "BasicEgg",
 		Name = "Basic Egg",
-		Cost = 100,
+		Cost = 60,
 		RequiredRebirths = 0,
-		Zone = "Farm",
+		Zone = "Forest",
 		Pets = {
 			{ Name = "Puppy", Rarity = "Common", Weight = 50, Multiplier = 1.1 },
 			{ Name = "Kitten", Rarity = "Common", Weight = 50, Multiplier = 1.15 },
@@ -151,7 +151,7 @@ GameConfig.Eggs = {
 		Name = "Golden Egg",
 		Cost = 25000,
 		RequiredRebirths = 1,
-		Zone = "Desert",
+		Zone = "Frost",
 		Pets = {
 			{ Name = "Golden Retriever", Rarity = "Rare", Weight = 40, Multiplier = 2 },
 			{ Name = "Griffin", Rarity = "Epic", Weight = 30, Multiplier = 3.5 },
@@ -176,7 +176,7 @@ function GameConfig.GetRebirthMultiplier(rebirthCount)
 end
 
 function GameConfig.GetMaxEquippedPets(rebirthCount)
-	return GameConfig.BaseMaxEquippedPets + rebirthCount
+	return math.min(GameConfig.MaxEquippedPets, GameConfig.BaseMaxEquippedPets + rebirthCount)
 end
 
 -- Weighted random pet roll from an egg's pet pool.
@@ -207,4 +207,12 @@ function GameConfig.GetPetMultiplierTotal(equippedPets)
 	return total
 end
 
+GameConfig.MaxPets = 200
+GameConfig.MaxEquippedPets = 8
+GameConfig.MaxCurrency = 1e100
+GameConfig.MaxUpgradeLevel = 250
+GameConfig.HatchCooldown = 0.8
+GameConfig.AutosaveSeconds = 60
+GameConfig.LeaderboardRefreshSeconds = 120
+GameConfig.Sounds = {Click="rbxassetid://88442833509532", Purchase="rbxassetid://139719503904449", Rare="rbxassetid://1839881844"}
 return GameConfig

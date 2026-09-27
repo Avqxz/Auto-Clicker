@@ -1,212 +1,95 @@
--- Minimal FUNCTIONAL map markers only, organized into the Zones / Spawns /
--- Interactives folder architecture common to Roblox simulator maps.
--- Deliberately not decorative: procedurally-generated primitive parts
--- (boxes/spheres/pyramids) have a hard visual ceiling and were never going
--- to look as good as a real asset pack placed by hand in Studio. This script
--- only creates what gameplay actually needs (spawn point, click point,
--- rebirth altar, one marker per egg, and the Desert zone gate), each labeled
--- with a floating text tag so they're easy to find and either dress up or
--- leave as-is. Everything else -- ground, trees, buildings, terrain -- is
--- meant to be built by hand with Toolbox assets.
---
--- IMPORTANT: this script destroys and rebuilds its own "Map" folder in
--- Workspace every time the server starts. Do NOT put hand-placed scenery
--- inside that folder, or it'll be wiped on the next Play/publish -- put your
--- own assets in a separate folder (or loose in Workspace) instead.
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
-
-local MapBuilder = {}
-
-local FARM_CENTER = Vector3.new(0, 0, 0)
-local DESERT_CENTER = Vector3.new(0, 0, -450)
-local DESERT_DOOR_Z = -150
-
-local function newPart(props)
-	local p = Instance.new("Part")
-	p.Anchored = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	for key, value in pairs(props) do
-		p[key] = value
-	end
-	return p
+-- JTea's free simulator pack supplies the authored maps, shops, foliage and rocks.
+local Config=require(game.ReplicatedStorage.Modules.GameConfig)
+local MapBuilder={}
+local V=Vector3.new local C=Color3.fromRGB
+local function part(parent,name,size,pos,color,material)
+ local p=Instance.new('Part') p.Name=name p.Size=size p.Position=pos p.Color=color
+ p.Material=material or Enum.Material.SmoothPlastic p.Anchored=true p.TopSurface=Enum.SurfaceType.Smooth p.Parent=parent return p
 end
-
-local function addLabel(parent, text)
-	local billboard = Instance.new("BillboardGui")
-	billboard.Size = UDim2.new(0, 160, 0, 34)
-	billboard.StudsOffset = Vector3.new(0, 3, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = parent
-
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.new(1, 0, 1, 0)
-	label.Font = Enum.Font.Gotham
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.TextStrokeTransparency = 0.2
-	label.Text = text
-	label.Parent = billboard
+local function label(p,text)
+ local gui=Instance.new('BillboardGui') gui.Size=UDim2.fromOffset(210,56) gui.StudsOffset=V(0,5,0) gui.MaxDistance=95 gui.Parent=p
+ local t=Instance.new('TextLabel') t.Size=UDim2.fromScale(1,1) t.BackgroundTransparency=1 t.Text=text
+ t.Font=Enum.Font.FredokaOne t.TextScaled=true t.TextColor3=C(255,255,255) t.TextStrokeColor3=C(25,44,62) t.TextStrokeTransparency=0 t.Parent=gui
 end
-
--- Places one small marker per egg along an arc in front of `center`, facing
--- back toward `facingCenter`. Returns { [eggId] = eggPart }.
-local function buildEggMarkers(parentFolder, eggs, center, facingCenter)
-	local eggParts = {}
-	local count = #eggs
-	if count == 0 then
-		return eggParts
-	end
-
-	local forward = (facingCenter - center)
-	forward = if forward.Magnitude > 0 then forward.Unit else Vector3.new(0, 0, -1)
-	local baseAngle = math.atan2(forward.X, forward.Z)
-
-	for i, egg in ipairs(eggs) do
-		local t = if count > 1 then (i - 1) / (count - 1) - 0.5 else 0
-		local angle = baseAngle + t * (math.pi / 3)
-		local radius = 45
-		local offset = Vector3.new(math.sin(angle) * radius, 0, math.cos(angle) * radius)
-		local position = center + offset
-
-		local pod = newPart({
-			Name = egg.Id,
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(4, 4, 4),
-			Position = Vector3.new(position.X, 3, position.Z),
-			Material = Enum.Material.Neon,
-			Color = Color3.fromRGB(255, 255, 255),
-			Parent = parentFolder,
-		})
-		addLabel(pod, "Egg: " .. egg.Name)
-
-		eggParts[egg.Id] = pod
-	end
-
-	return eggParts
+local function place(template,parent,name,pos,height)
+ local m=template:Clone() m.Name=name m.Parent=parent
+ if height then local _,size=m:GetBoundingBox() m:ScaleTo(m:GetScale()*height/size.Y) end
+ local cf,size=m:GetBoundingBox()
+ m:PivotTo(CFrame.new(pos+V(0,size.Y/2,0))*cf:Inverse()*m:GetPivot())
+ for _,d in ipairs(m:GetDescendants()) do
+  if d:IsA('BasePart') then d.Anchored=true
+  elseif d:IsA('LuaSourceContainer') then d:Destroy() end
+ end
+ return m
 end
-
--- Returns references to the interactive parts so init.server.lua can wire up
--- ClickDetectors and the Desert zone gate's Touched-based rebirth check.
 function MapBuilder.Build()
-	local existing = workspace:FindFirstChild("Map")
-	if existing then
-		existing:Destroy()
-	end
-
-	-- Remove the default "Baseplate" template part if present, since it
-	-- overlaps our own ground at nearly the same height and causes
-	-- z-fighting / lets the player spawn on the wrong surface.
-	local defaultBaseplate = workspace:FindFirstChild("Baseplate")
-	if defaultBaseplate and defaultBaseplate:IsA("BasePart") then
-		defaultBaseplate:Destroy()
-	end
-
-	local mapFolder = Instance.new("Folder")
-	mapFolder.Name = "Map"
-	mapFolder.Parent = workspace
-
-	local zonesFolder = Instance.new("Folder")
-	zonesFolder.Name = "Zones"
-	zonesFolder.Parent = mapFolder
-
-	local spawnsFolder = Instance.new("Folder")
-	spawnsFolder.Name = "Spawns"
-	spawnsFolder.Parent = mapFolder
-
-	local interactivesFolder = Instance.new("Folder")
-	interactivesFolder.Name = "Interactives"
-	interactivesFolder.Parent = mapFolder
-
-	-- Plain flat placeholder ground spanning both zones, just so players
-	-- don't fall through while you build real terrain/scenery. Replace or
-	-- hide this once you've placed real assets.
-	newPart({
-		Name = "PlaceholderGround",
-		Size = Vector3.new(500, 4, 750),
-		Position = Vector3.new(0, -2, -225),
-		Material = Enum.Material.SmoothPlastic,
-		Color = Color3.fromRGB(160, 160, 165),
-		Parent = zonesFolder,
-	})
-
-	-- Desert zone gate: a full-width barrier players must physically cross,
-	-- gated by rebirths (see init.server.lua for the Touched-based check).
-	local desertDoor = newPart({
-		Name = "DesertDoor",
-		Size = Vector3.new(500, 20, 2),
-		Position = Vector3.new(0, 10, DESERT_DOOR_Z),
-		Material = Enum.Material.Neon,
-		Color = Color3.fromRGB(220, 70, 70),
-		Transparency = 0.5,
-		Parent = zonesFolder,
-	})
-	addLabel(desertDoor, "Desert Zone Gate")
-
-	local spawnLocation = Instance.new("SpawnLocation")
-	spawnLocation.Name = "MainSpawn"
-	spawnLocation.Size = Vector3.new(8, 1, 8)
-	spawnLocation.Position = FARM_CENTER + Vector3.new(0, 1.5, 25)
-	spawnLocation.Anchored = true
-	spawnLocation.Material = Enum.Material.Neon
-	spawnLocation.Color = Color3.fromRGB(255, 215, 60)
-	spawnLocation.Duration = 0
-	spawnLocation.TopSurface = Enum.SurfaceType.Smooth
-	spawnLocation.Parent = spawnsFolder
-	addLabel(spawnLocation, "Spawn")
-
-	local clickOrb = newPart({
-		Name = "ClickOrb",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.new(4, 4, 4),
-		Position = FARM_CENTER + Vector3.new(0, 4, 0),
-		Material = Enum.Material.Neon,
-		Color = Color3.fromRGB(255, 200, 40),
-		Parent = interactivesFolder,
-	})
-	addLabel(clickOrb, "Click Point")
-
-	local altar = newPart({
-		Name = "RebirthAltar",
-		Size = Vector3.new(6, 2, 6),
-		Position = FARM_CENTER + Vector3.new(30, 1, -60),
-		Material = Enum.Material.Neon,
-		Color = Color3.fromRGB(160, 60, 220),
-		Parent = interactivesFolder,
-	})
-	addLabel(altar, "Rebirth Altar")
-
-	local farmEggs, desertEggs = {}, {}
-	for _, egg in ipairs(GameConfig.Eggs) do
-		if egg.Zone == "Desert" then
-			table.insert(desertEggs, egg)
-		else
-			table.insert(farmEggs, egg)
-		end
-	end
-
-	local eggParts = {}
-	local farmEggMarkers =
-		buildEggMarkers(interactivesFolder, farmEggs, FARM_CENTER + Vector3.new(-25, 0, -70), DESERT_CENTER)
-	for id, part in pairs(farmEggMarkers) do
-		eggParts[id] = part
-	end
-	local desertEggMarkers =
-		buildEggMarkers(interactivesFolder, desertEggs, DESERT_CENTER + Vector3.new(0, 0, -35), FARM_CENTER)
-	for id, part in pairs(desertEggMarkers) do
-		eggParts[id] = part
-	end
-
-	return {
-		ClickOrb = clickOrb,
-		RebirthAltar = altar,
-		EggParts = eggParts,
-		DesertDoor = desertDoor,
-	}
+ local pack=game.ServerStorage:FindFirstChild('JTeaSimulatorPack')
+ assert(pack,'Import the free JTea pack 7151365600 into ServerStorage as JTeaSimulatorPack (see ASSETS.md).')
+ local library=pack:GetChildren()[1]:GetChildren()[1]
+ local old=workspace:FindFirstChild('Map') if old then old:Destroy() end
+ local preview=workspace:FindFirstChild('JTeaPreview') if preview then preview:Destroy() end
+ local map=Instance.new('Folder') map.Name='Map' map.Parent=workspace
+ local zones=Instance.new('Folder') zones.Name='Zones' zones.Parent=map
+ local interactive=Instance.new('Folder') interactive.Name='Interactives' interactive.Parent=map
+ local function biome(name,z,floorName)
+  local m=library[name].Map:GetChildren()[1]:Clone() m.Name=name m.Parent=zones
+  local floor=m:FindFirstChild(floorName)
+  assert(floor,'Pack floor missing for '..name)
+  local offset=V(-floor.Position.X,1-(floor.Position.Y+floor.Size.Y/2),z-floor.Position.Z)
+  m:PivotTo(m:GetPivot()+offset)
+  for _,d in ipairs(m:GetDescendants()) do
+   if d:IsA('BasePart') then
+    d.Anchored=true
+    if d:IsA('MeshPart') and d.Material==Enum.Material.SmoothPlastic then
+     d.Material=d.Color.G>d.Color.R*1.15 and Enum.Material.Grass or Enum.Material.Slate
+    end
+   end
+  end
+  return m
+ end
+ biome('Forest',0,'Texture Part') biome('Ice',-310,'Floor')
+ -- Replace only terrain previously generated by this project, then sculpt beneath the authored floors:
+ -- a ground slab just under floor height plus low hills along both sides to close in each zone.
+ local terrain=workspace.Terrain
+ for _,zone in ipairs({{z=0,surface=Enum.Material.Grass},{z=-310,surface=Enum.Material.Snow}}) do
+  terrain:FillBlock(CFrame.new(0,-8,zone.z),V(280,24,280),Enum.Material.Air)
+  terrain:FillBlock(CFrame.new(0,-8,zone.z),V(258,16,258),zone.surface)
+  for _,side in ipairs({-1,1}) do for i=1,5 do
+   terrain:FillBall(V(side*122,-3,zone.z-95+i*36),12,zone.surface)
+  end end
+ end
+ require(script.Parent.AssetScenery).Build(map)
+ local templateSpawn=workspace:FindFirstChild('SpawnLocation') if templateSpawn then templateSpawn.Enabled=false end
+ local spawn=Instance.new('SpawnLocation') spawn.Name='MainSpawn' spawn.Size=V(10,0.5,10)
+ spawn.Position=V(0,1.3,40) spawn.Transparency=1 spawn.Anchored=true spawn.Neutral=true spawn.Duration=0 spawn.Parent=map
+ local function pad(name,pos,color)
+  local p=part(interactive,name,V(10,0.6,10),pos,color,Enum.Material.Neon) return p
+ end
+ pad('SpawnRing',V(0,1.2,40),C(68,219,238))
+ local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,5,10),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
+ label(orb,'CLICK TO EARN')
+ local altar=pad('RebirthAltar',V(49,1.5,0),C(177,104,240)) label(altar,'REBIRTH\nPermanent power')
+ place(library.Forest['Extra Portal']:GetChildren()[1],zones,'RebirthShrine',V(49,1,0),18)
+ local eggs={}
+ for _,egg in ipairs(Config.Eggs) do
+  local late=egg.Zone=='Frost' local pos=late and V(-35,1,-305) or V(-42,1,-3)
+  place(library[late and 'Ice' or 'Forest'].Shop:GetChildren()[1],zones,egg.Id..'Shop',pos,16)
+  local p=part(interactive,egg.Id,V(4.5,6,4.5),pos+V(0,4.5,5),late and C(255,216,99) or C(92,233,236),Enum.Material.Neon)
+  p.Shape=Enum.PartType.Ball label(p,egg.Name..'\n'..egg.Cost..' coins') eggs[egg.Id]=p
+ end
+ place(library.Ice['Extra Portal']:GetChildren()[1],zones,'IcePortal',V(0,1,-63),19)
+ local door=part(interactive,'FrostPortal',V(10,12,2),V(0,7,-61),C(90,206,255),Enum.Material.Neon)
+ door.Transparency=0.65 door.CanCollide=false door:SetAttribute('Destination',V(0,5,-270))
+ label(door,'FROST WORLD\n'..Config.FrostZoneRequiredRebirths..' rebirth required')
+ local back=pad('ReturnPortal',V(0,1.4,-260),C(84,230,186)) label(back,'RETURN TO FOREST')
+ local prompt=Instance.new('ProximityPrompt') prompt.ActionText='Return' prompt.ObjectText='Forest' prompt.HoldDuration=0 prompt.Parent=back
+ prompt.Triggered:Connect(function(player) if player.Character then player.Character:PivotTo(CFrame.new(0,5,40)) end end)
+ local lighting=game:GetService('Lighting') lighting.ClockTime=14 lighting.Brightness=2
+ lighting.Ambient=C(128,141,166) lighting.OutdoorAmbient=C(161,178,192)
+ local grade=lighting:FindFirstChild('SimulatorGrade') or Instance.new('ColorCorrectionEffect')
+ grade.Name='SimulatorGrade' grade.Saturation=0.08 grade.Contrast=0.07 grade.Parent=lighting
+ local bloom=lighting:FindFirstChild('SimulatorBloom') or Instance.new('BloomEffect')
+ bloom.Name='SimulatorBloom' bloom.Intensity=0.22 bloom.Size=18 bloom.Threshold=1.5 bloom.Parent=lighting
+ return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,FrostPortal=door}
 end
-
 return MapBuilder

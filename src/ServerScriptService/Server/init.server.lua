@@ -14,6 +14,7 @@ local PetFollowers = require(script.PetFollowers)
 -- ===== Map =====
 
 local mapRefs = MapBuilder.Build()
+require(script.GlobalBoards).Start(PlayerData)
 
 -- ===== Remotes =====
 
@@ -40,7 +41,22 @@ local FusePetsRemote = createRemoteEvent("FusePets")
 local EggResultRemote = createRemoteEvent("EggResult")
 local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
 
+local FeedbackRemote=createRemoteEvent("Feedback")
+local AnnouncementRemote=createRemoteEvent("Announcement")
+local RedeemCodeRemote=createRemoteEvent("RedeemCode")
+local RequestDataRemote=createRemoteEvent("RequestData")
+local PromoCodes=require(script.PromoCodes)
 local lastClickTimes = {}
+local limits={}
+local function allow(player,key,seconds)
+ local id=player.UserId limits[id]=limits[id] or {}
+ local now=os.clock() if now-(limits[id][key] or -math.huge)<seconds then return false end
+ limits[id][key]=now return true
+end
+local function earn(data,amount)
+ data.Coins=math.min(GameConfig.MaxCurrency,data.Coins+amount)
+ data.TotalCoinsEarned=math.min(GameConfig.MaxCurrency,data.TotalCoinsEarned+amount)
+end
 
 -- ===== Helpers =====
 
@@ -65,7 +81,7 @@ local function setupLeaderstats(player, data)
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
 
-	local coins = Instance.new("IntValue")
+	local coins = Instance.new("NumberValue")
 	coins.Name = "Coins"
 	coins.Value = math.floor(data.Coins)
 	coins.Parent = leaderstats
@@ -114,6 +130,8 @@ end
 
 Players.PlayerAdded:Connect(function(player)
 	local data = PlayerData.Load(player)
+ if not data then return end
+ if not player.Parent then PlayerData.Release(player) return end
 	setupLeaderstats(player, data)
 	pushData(player)
 	refreshFollowers(player, data)
@@ -123,6 +141,7 @@ Players.PlayerRemoving:Connect(function(player)
 	PlayerData.Release(player)
 	PetFollowers.Clear(player)
 	lastClickTimes[player.UserId] = nil
+ limits[player.UserId]=nil
 end)
 
 -- ===== Clicking =====
@@ -141,8 +160,7 @@ local function handleClick(player)
 	end
 
 	local earned = getClickPower(data)
-	data.Coins += earned
-	data.TotalCoinsEarned += earned
+	earn(data,earned)
 
 	updateLeaderstats(player)
 	pushData(player)
@@ -153,6 +171,7 @@ ClickRemote.OnServerEvent:Connect(handleClick)
 -- ===== Purchases =====
 
 PurchaseUpgradeRemote.OnServerEvent:Connect(function(player, upgradeId)
+ if type(upgradeId)~="string" or not allow(player,"purchase",0.12) then return end
 	local data = PlayerData.Get(player)
 	local upgrade = findById(GameConfig.Upgrades, upgradeId)
 	if not data or not upgrade then
@@ -160,7 +179,8 @@ PurchaseUpgradeRemote.OnServerEvent:Connect(function(player, upgradeId)
 	end
 
 	local currentLevel = data.UpgradeLevels[upgradeId] or 0
-	local cost = GameConfig.GetCost(upgrade, currentLevel)
+	if currentLevel>=GameConfig.MaxUpgradeLevel then return end
+ local cost = GameConfig.GetCost(upgrade, currentLevel)
 	if data.Coins < cost then
 		return
 	end
@@ -168,12 +188,14 @@ PurchaseUpgradeRemote.OnServerEvent:Connect(function(player, upgradeId)
 	data.Coins -= cost
 	data.UpgradeLevels[upgradeId] = currentLevel + 1
 	data.ClickPower += upgrade.ClickPowerAdd
+ FeedbackRemote:FireClient(player,"Purchase","Upgrade purchased!")
 
 	updateLeaderstats(player)
 	pushData(player)
 end)
 
 PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId)
+ if type(autoId)~="string" or not allow(player,"purchase",0.12) then return end
 	local data = PlayerData.Get(player)
 	local auto = findById(GameConfig.AutoClickers, autoId)
 	if not data or not auto then
@@ -181,13 +203,15 @@ PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId)
 	end
 
 	local currentLevel = data.AutoClickerLevels[autoId] or 0
-	local cost = GameConfig.GetCost(auto, currentLevel)
+	if currentLevel>=GameConfig.MaxUpgradeLevel then return end
+ local cost = GameConfig.GetCost(auto, currentLevel)
 	if data.Coins < cost then
 		return
 	end
 
 	data.Coins -= cost
 	data.AutoClickerLevels[autoId] = currentLevel + 1
+ FeedbackRemote:FireClient(player,"Purchase","Auto-clicker purchased!")
 
 	updateLeaderstats(player)
 	pushData(player)
@@ -196,6 +220,7 @@ end)
 -- ===== Pets & eggs =====
 
 local function handleHatchEgg(player, eggId)
+ if type(eggId)~="string" or not allow(player,"hatch",GameConfig.HatchCooldown) then return end
 	local data = PlayerData.Get(player)
 	local egg = findById(GameConfig.Eggs, eggId)
 	if not data or not egg then
@@ -210,7 +235,9 @@ local function handleHatchEgg(player, eggId)
 		return
 	end
 
-	data.Coins -= egg.Cost
+	if #data.Pets>=GameConfig.MaxPets then FeedbackRemote:FireClient(player,"Info","Pet storage full. Fuse duplicates to make room.") return end
+ data.Coins -= egg.Cost
+ data.EggsHatched=(data.EggsHatched or 0)+1
 
 	local rolled = GameConfig.RollPet(egg)
 	local uid = data.NextPetUid
@@ -234,6 +261,9 @@ local function handleHatchEgg(player, eggId)
 	updateLeaderstats(player)
 	pushData(player)
 	EggResultRemote:FireClient(player, newPet)
+ if newPet.Rarity=="Mythic" or newPet.Rarity=="Legendary" then
+  AnnouncementRemote:FireAllClients(player.Name.." hatched "..newPet.Rarity.." "..newPet.Name.."!",newPet.Rarity)
+ end
 	if equipChanged then
 		refreshFollowers(player, data)
 	end
@@ -351,6 +381,7 @@ end)
 -- ===== Rebirth =====
 
 local function handleRebirth(player)
+ if not allow(player,"rebirth",0.5) then return end
 	local data = PlayerData.Get(player)
 	if not data then
 		return
@@ -367,6 +398,7 @@ local function handleRebirth(player)
 	data.UpgradeLevels = {}
 	data.AutoClickerLevels = {}
 	data.RebirthCount += 1
+ FeedbackRemote:FireClient(player,"Rebirth","REBIRTH! Permanent multiplier x"..GameConfig.GetRebirthMultiplier(data.RebirthCount))
 
 	updateLeaderstats(player)
 	pushData(player)
@@ -392,15 +424,13 @@ for eggId, eggPart in pairs(mapRefs.EggParts) do
 	end)
 end
 
--- ===== Desert zone gate (physical rebirth-gated barrier) =====
--- The barrier stays solid by default so it blocks everyone. A qualifying
--- player briefly opens it (CanCollide off) and it re-locks itself shortly
--- after -- toggling it permanently would unlock it for every other player
--- on the server forever, which is wrong for a shared multiplayer gate.
+-- ===== Frost World portal (rebirth-gated teleport) =====
+-- The portal is non-solid. Touching it teleports qualifying players to its
+-- "Destination" attribute; everyone else gets a toast and is pushed back.
 
 local zoneLockedCooldown = {}
 
-mapRefs.DesertDoor.Touched:Connect(function(hit)
+mapRefs.FrostPortal.Touched:Connect(function(hit)
 	local character = hit.Parent
 	local player = Players:GetPlayerFromCharacter(character)
 	if not player then
@@ -412,16 +442,11 @@ mapRefs.DesertDoor.Touched:Connect(function(hit)
 		return
 	end
 
-	if data.RebirthCount >= GameConfig.DesertZoneRequiredRebirths then
-		if not mapRefs.DesertDoor.CanCollide then
-			return
-		end
-		mapRefs.DesertDoor.CanCollide = false
-		mapRefs.DesertDoor.Transparency = 0.85
-		task.delay(1, function()
-			mapRefs.DesertDoor.CanCollide = true
-			mapRefs.DesertDoor.Transparency = 0.5
-		end)
+	if data.RebirthCount >= GameConfig.FrostZoneRequiredRebirths then
+        local root=character:FindFirstChild("HumanoidRootPart")
+        if root and allow(player,"gate",1) then
+         root.CFrame=CFrame.new(mapRefs.FrostPortal:GetAttribute("Destination"))
+        end
 		return
 	end
 
@@ -433,11 +458,11 @@ mapRefs.DesertDoor.Touched:Connect(function(hit)
 		zoneLockedCooldown[player.UserId] = nil
 	end)
 
-	ZoneLockedRemote:FireClient(player, GameConfig.DesertZoneRequiredRebirths)
+	ZoneLockedRemote:FireClient(player, GameConfig.FrostZoneRequiredRebirths)
 
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if rootPart then
-		local delta = rootPart.Position - mapRefs.DesertDoor.Position
+		local delta = rootPart.Position - mapRefs.FrostPortal.Position
 		delta = Vector3.new(delta.X, 0, delta.Z)
 		local pushDirection = if delta.Magnitude > 0 then delta.Unit else Vector3.new(0, 0, 1)
 		rootPart.CFrame = rootPart.CFrame + pushDirection * 6
@@ -466,8 +491,7 @@ RunService.Heartbeat:Connect(function(dt)
 			if coinsPerSecond > 0 then
 				local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
 				local earned = coinsPerSecond * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
-				data.Coins += earned
-				data.TotalCoinsEarned += earned
+				earn(data,earned)
 				updateLeaderstats(player)
 				pushData(player)
 			end
@@ -479,7 +503,7 @@ end)
 
 task.spawn(function()
 	while true do
-		task.wait(60)
+		task.wait(GameConfig.AutosaveSeconds)
 		for _, player in ipairs(Players:GetPlayers()) do
 			PlayerData.Save(player)
 		end
@@ -487,7 +511,29 @@ task.spawn(function()
 end)
 
 game:BindToClose(function()
-	for _, player in ipairs(Players:GetPlayers()) do
-		PlayerData.Release(player)
-	end
+ local pending=0
+ for _,player in ipairs(Players:GetPlayers()) do
+  pending+=1 task.spawn(function() PlayerData.Release(player) pending-=1 end)
+ end
+ local deadline=os.clock()+25
+ while pending>0 and os.clock()<deadline do task.wait(0.1) end
+end)
+
+RequestDataRemote.OnServerEvent:Connect(function(player)
+ if allow(player,"sync",1) then pushData(player) end
+end)
+RedeemCodeRemote.OnServerEvent:Connect(function(player,raw)
+ if not allow(player,"code",1) then return end
+ if type(raw)~="string" or #raw>40 then return end
+ local code=string.upper(string.match(raw,"^%s*(.-)%s*$"))
+ local data=PlayerData.Get(player) if not data then return end
+ local reward=PromoCodes[code]
+ if not reward or (reward.ExpiresAt and os.time()>reward.ExpiresAt) then FeedbackRemote:FireClient(player,"Info","That code is invalid or expired.") return end
+ data.RedeemedCodes=data.RedeemedCodes or {}
+ if data.RedeemedCodes[code] then FeedbackRemote:FireClient(player,"Info","You already redeemed this code.") return end
+ -- No yielding between the duplicate check, marking the code and granting its reward.
+ data.RedeemedCodes[code]=true earn(data,reward.Coins)
+ updateLeaderstats(player) pushData(player)
+ FeedbackRemote:FireClient(player,"Purchase","Code redeemed! +"..reward.Coins.." Coins")
+ task.spawn(function() PlayerData.Save(player) end)
 end)

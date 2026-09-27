@@ -18,17 +18,14 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Leaderboard** — Coins and Rebirths show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
-- **Two zones, procedurally built** — a Farm zone (grass ground, plaza with a clickable orb, rebirth altar, wooden fence, scattered trees, Basic Egg hatchery) connected by a sandstone path to a Desert zone (sand ground, rock/cactus decoration, sandstone fence, Golden Egg hatchery gated behind 1 rebirth). All generated in code (see `MapBuilder.lua`) using Roblox's built-in materials (Grass, Sand, Sandstone, Rock, Cobblestone, Wood, Marble, Neon) — there are no binary place/mesh assets to import. The in-world orb/eggs/altar are also directly clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
+- **Two zones built from a free asset pack** — a Forest zone (spawn, clickable orb, Rebirth shrine, Basic Egg shop) and a Frost World zone (Golden Egg shop), reached through a portal gated behind 1 rebirth. `MapBuilder.lua` assembles them from JTea's free simulator pack, sculpts grass/snow terrain with side hills, and `AssetScenery.lua` scatters trees, rocks and bushes along the edges. The packs must be imported into ServerStorage first — see [ASSETS.md](ASSETS.md). The in-world orb/eggs/altar are also directly clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
 - **3D pet models** — a simple procedural "critter" model (`PetModelFactory.lua`) represents every pet: it's used for the pets that visibly orbit your character when equipped (seen by every player, not just you), for the icons in the Pets inventory list, and for the spinning model in the hatch-reveal popup. Golden pets get a neon look and sparkle particles.
 
-Not implemented (possible extensions): hand-authored mesh/asset pets and
-terrain (these are simple primitive-part builds, not sculpted meshes or
-Roblox Terrain), an Aura/dice gacha system, more than two zones, and
-gamepass monetization — the last would need real Roblox MarketplaceService
-product IDs configured in Studio, which can't be set up from code alone.
-Also note "textures" here means Roblox's built-in materials, not the
-reference game's actual proprietary assets/decals, which aren't accessible
-from this environment.
+Not implemented (possible extensions): hand-authored mesh/asset pets (pets
+are simple primitive-part builds), an Aura/dice gacha system, more than two
+zones, and gamepass monetization — the last would need real Roblox
+MarketplaceService product IDs configured in Studio, which can't be set up
+from code alone.
 
 ## Project layout
 
@@ -42,7 +39,8 @@ src/
   ReplicatedStorage/Modules/PetModelFactory.lua        # Builds the procedural pet "critter" model (server + client)
   ServerScriptService/Server/init.server.lua           # Server bootstrap: remotes, click/purchase/hatch/equip/fuse/rebirth handling, autosave
   ServerScriptService/Server/PlayerData.lua             # DataStore load/save/cache module
-  ServerScriptService/Server/MapBuilder.lua             # Procedurally builds the Farm + Desert zones (ground, plaza, hatchery stalls, altar, path, decoration)
+  ServerScriptService/Server/MapBuilder.lua             # Builds the Forest + Frost World zones from the asset pack, plus terrain, lighting and interactives
+  ServerScriptService/Server/AssetScenery.lua           # Scatters optional prop assets (trees, rocks, bushes) along the zone edges
   ServerScriptService/Server/PetFollowers.lua           # Spawns/animates the equipped pets that orbit each player
   StarterPlayer/StarterPlayerScripts/Client/init.client.lua  # Builds the HUD/Shop/Eggs/Pets UI and talks to the server
 ```
@@ -54,7 +52,8 @@ src/
    ```
    rojo serve
    ```
-3. In Roblox Studio, open the Rojo plugin and click **Connect**.
+3. In Roblox Studio, open the Rojo plugin and click **Connect**. The first
+   time, also import the map assets into ServerStorage (see [ASSETS.md](ASSETS.md)).
 4. Press Play to test. Click the button to earn coins, open **Eggs** to hatch
    pets, **Pets** to equip/fuse them, **Shop** to buy upgrades/auto-clickers,
    and Rebirth once you've saved enough.
