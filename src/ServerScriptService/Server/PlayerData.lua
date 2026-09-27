@@ -30,6 +30,7 @@ local DEFAULT_DATA = {
 	Pets = {}, -- array of { Uid, Name, Rarity, Multiplier, Golden }
 	EquippedPetUids = {},
 	NextPetUid = 1,
+	HasPickedStarterPet = false,
 }
 
 local function deepCopy(t)
