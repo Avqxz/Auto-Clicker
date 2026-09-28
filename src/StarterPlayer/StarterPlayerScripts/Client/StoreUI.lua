@@ -1,11 +1,12 @@
--- STORE panel (gamepasses + developer products), the AUTO click toggle for Auto Click owners, and
--- the [VIP] chat tag. Items with Id 0 are hidden from players; in Studio they show as "ID not set"
+-- STORE panel (gamepasses + developer products) opened from a round shopping-cart button under the
+-- right-hand button column, the AUTO click toggle for Auto Click owners, and the [VIP] chat tag. Items with Id 0 are hidden from players; in Studio they show as "ID not set"
 -- so the layout can be checked before the real IDs are pasted into GameConfig.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TextChatService = game:GetService("TextChatService")
+local TweenService = game:GetService("TweenService")
 
 local GameConfig = require(game:GetService("ReplicatedStorage").Modules.GameConfig)
 
@@ -16,8 +17,7 @@ local MUTED = Color3.fromRGB(77, 116, 130)
 local GREY = Color3.fromRGB(152, 174, 184)
 local GREEN = Color3.fromRGB(88, 219, 132)
 
--- deps: { screenGui, controls, utility(text, y, color), createPanel, bindTab, registerPanel, styleButton,
---         dataRemote, clickRemote, tapButton }
+-- deps: { screenGui, createPanel, bindTab, registerPanel, styleButton, dataRemote, clickRemote }
 function StoreUI.Build(deps)
 	local player = Players.LocalPlayer
 	local isStudio = RunService:IsStudio()
@@ -44,11 +44,38 @@ function StoreUI.Build(deps)
 
 	local rows = {}
 	if visibleItems > 0 then
-		deps.controls.Size = UDim2.fromOffset(106, 370)
-		local storeButton = deps.utility("STORE", 324, Color3.fromRGB(255, 190, 40))
+		-- Round cart button: big 🛒 with a small STORE tag, wiggling now and then to catch the eye.
+		local cart = Instance.new("TextButton")
+		cart.Name = "CartButton"
+		-- Sits centered just under the right-hand button column (which ends at y=290), so it never
+		-- overlaps it however short the screen is.
+		cart.AnchorPoint = Vector2.new(0.5, 0)
+		cart.Position = UDim2.new(1, -63, 0, 294)
+		cart.Size = UDim2.fromOffset(74, 74)
+		cart.BackgroundColor3 = Color3.fromRGB(255, 190, 40)
+		cart.Text = ""
+		cart.Parent = deps.screenGui
+		Instance.new("UICorner", cart).CornerRadius = UDim.new(1, 0)
+		deps.styleButton(cart)
+		text(cart, { Size = UDim2.fromScale(1, 0.78), Position = UDim2.fromScale(0, 0.04), TextScaled = true,
+			Text = "🛒", TextColor3 = Color3.new(1, 1, 1) })
+		local tag = text(cart, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 6),
+			Size = UDim2.fromOffset(78, 24), TextScaled = true, Text = "STORE", TextColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(230, 70, 110) })
+		Instance.new("UICorner", tag).CornerRadius = UDim.new(1, 0)
+		task.spawn(function()
+			while cart.Parent do
+				task.wait(5)
+				for _, angle in ipairs({ -10, 9, -6, 4, 0 }) do
+					TweenService:Create(cart, TweenInfo.new(0.08), { Rotation = angle }):Play()
+					task.wait(0.08)
+				end
+			end
+		end)
+
 		local frame, scroll = deps.createPanel("StoreFrame", "Store")
 		deps.registerPanel(frame)
-		deps.bindTab(storeButton, frame)
+		deps.bindTab(cart, frame)
 
 		local order = 0
 		local function section(title)

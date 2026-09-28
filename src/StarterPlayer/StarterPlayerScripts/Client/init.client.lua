@@ -1415,8 +1415,6 @@ require(script.EconomyUI).Build({
 -- STORE (gamepasses / products), the AUTO click toggle, and the [VIP] chat tag.
 require(script.StoreUI).Build({
  screenGui=screenGui,
- controls=controls,
- utility=utility,
  createPanel=createPanel,
  bindTab=bindTab,
  registerPanel=function(frame) table.insert(panels,frame) panelScales[frame]=Instance.new("UIScale",frame) end,

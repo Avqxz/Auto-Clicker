@@ -81,7 +81,7 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/EconomyUI.lua    # Coins counter, SELL button, boost timers and Token Shop
   StarterPlayer/StarterPlayerScripts/Client/UIPolish.lua     # Menu blur, panel pop-in and camera shake
   StarterPlayer/StarterPlayerScripts/Client/Counter.lua      # Animated number labels
-  StarterPlayer/StarterPlayerScripts/Client/StoreUI.lua      # STORE panel, AUTO click toggle, [VIP] chat tag
+  StarterPlayer/StarterPlayerScripts/Client/StoreUI.lua      # Shopping-cart STORE button + panel, AUTO click toggle, [VIP] chat tag
 ```
 
 ## Running it in Roblox Studio
