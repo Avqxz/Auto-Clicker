@@ -119,12 +119,15 @@ GameConfig.ClickBoosts = {
 	},
 }
 
-function GameConfig.GetCritChance(levels)
+-- `skills` (the player's skill-tree levels) is optional everywhere below.
+function GameConfig.GetCritChance(levels, skills)
 	return GameConfig.Crit.BaseChance + (levels.CritChance or 0) * GameConfig.ClickBoosts[1].PerLevel
+		+ GameConfig.GetSkillLevel(skills, "CritMastery") * 0.01
 end
 
-function GameConfig.GetCritDamage(levels)
+function GameConfig.GetCritDamage(levels, skills)
 	return GameConfig.Crit.BaseDamage + (levels.CritDamage or 0) * GameConfig.ClickBoosts[2].PerLevel
+		+ GameConfig.GetSkillLevel(skills, "MegaCrits") * 0.25
 end
 
 function GameConfig.GetComboWindow(levels)
@@ -138,6 +141,12 @@ function GameConfig.GetComboTier(comboCount)
 		end
 	end
 	return GameConfig.Combo.Tiers[#GameConfig.Combo.Tiers]
+end
+
+-- The tier's multiplier with the Combo Boost skill, which grows only the bonus part (x2 -> x2.2 at level 1).
+function GameConfig.GetComboMultiplier(comboCount, skills)
+	local bonus = GameConfig.GetComboTier(comboCount).Multiplier - 1
+	return 1 + bonus * (1 + 0.2 * GameConfig.GetSkillLevel(skills, "ComboBoost"))
 end
 
 -- "current → next" text for a click boost at `level`.
@@ -199,11 +208,65 @@ GameConfig.StarterPets = {
 	{ Name = "Bunny", Rarity = "Common", Multiplier = 1.1 },
 }
 
+-- Players see this as "Ascension"; the save keeps the original RebirthCount field.
 GameConfig.Rebirth = {
 	BaseRequirement = 1500,
 	RequirementMultiplier = 3,
-	MultiplierPerRebirth = 1, -- +50% coin gain per rebirth
+	MultiplierPerRebirth = 1, -- +100% coin gain per Ascension
+	BaseGems = 10, -- Gems for ascending at exactly the requirement on the first Ascension
 }
+
+-- ===== Skill tree (bought with Gems, never reset) =====
+-- Each node's effect is applied where that stat is computed (click power, crits, combo, auto
+-- income, offline earnings, egg luck, equip slots, fusion). Requires = another node at level >= 1.
+
+GameConfig.Skills = {
+	{ Id = "ClickMastery", Branch = "Power", Name = "Click Mastery", MaxLevel = 10, BaseCost = 5, CostGrowth = 1.5,
+		Effect = function(l) return "+" .. (l * 10) .. "% click power" end },
+	{ Id = "CritMastery", Branch = "Power", Name = "Crit Mastery", MaxLevel = 5, BaseCost = 10, CostGrowth = 1.6, Requires = "ClickMastery",
+		Effect = function(l) return "+" .. l .. "% crit chance" end },
+	{ Id = "MegaCrits", Branch = "Power", Name = "Mega Crits", MaxLevel = 5, BaseCost = 15, CostGrowth = 1.6, Requires = "CritMastery",
+		Effect = function(l) return "+" .. string.format("%.2f", l * 0.25) .. "x crit damage" end },
+	{ Id = "ComboBoost", Branch = "Power", Name = "Combo Boost", MaxLevel = 5, BaseCost = 10, CostGrowth = 1.6, Requires = "ClickMastery",
+		Effect = function(l) return "+" .. (l * 20) .. "% combo bonus" end },
+	{ Id = "AutoPower", Branch = "Automation", Name = "Auto Power", MaxLevel = 10, BaseCost = 5, CostGrowth = 1.5,
+		Effect = function(l) return "+" .. (l * 20) .. "% auto-clicker income" end },
+	{ Id = "OfflineEarnings", Branch = "Automation", Name = "Offline Earnings", MaxLevel = 5, BaseCost = 12, CostGrowth = 1.7, Requires = "AutoPower",
+		Effect = function(l) return (l * 10) .. "% of auto income while offline (8h max)" end },
+	{ Id = "HeadStart", Branch = "Automation", Name = "Head Start", MaxLevel = 5, BaseCost = 8, CostGrowth = 1.7, Requires = "AutoPower",
+		Effect = function(l) return "Start each Ascension with " .. (500 * l * l) .. " coins" end },
+	{ Id = "EggLuck", Branch = "Luck", Name = "Egg Luck", MaxLevel = 10, BaseCost = 5, CostGrowth = 1.5,
+		Effect = function(l) return "+" .. (l * 10) .. "% odds for non-Common pets" end },
+	{ Id = "PetSlots", Branch = "Luck", Name = "Pet Slots", MaxLevel = 2, BaseCost = 25, CostGrowth = 2.5, Requires = "EggLuck",
+		Effect = function(l) return "+" .. l .. " pet equip slot" .. (l == 1 and "" or "s") end },
+	{ Id = "GoldenTouch", Branch = "Luck", Name = "Golden Touch", MaxLevel = 4, BaseCost = 12, CostGrowth = 1.7, Requires = "EggLuck",
+		Effect = function(l) return "Golden fusions give x" .. string.format("%.2f", 2 + 0.25 * l) end },
+}
+GameConfig.SkillBranches = { "Power", "Automation", "Luck" }
+GameConfig.OfflineCapSeconds = 8 * 60 * 60
+
+function GameConfig.GetSkill(id)
+	for _, node in ipairs(GameConfig.Skills) do
+		if node.Id == id then
+			return node
+		end
+	end
+	return nil
+end
+
+function GameConfig.GetSkillLevel(skills, id)
+	return skills and skills[id] or 0
+end
+
+function GameConfig.GetSkillCost(node, level)
+	return math.floor(node.BaseCost * node.CostGrowth ^ level)
+end
+
+-- Gems for ascending now: more if you overshoot the requirement, and more each Ascension.
+function GameConfig.GetAscensionGems(coins, rebirthCount)
+	local ratio = math.max(1, coins / GameConfig.GetRebirthRequirement(rebirthCount))
+	return math.floor(GameConfig.Rebirth.BaseGems * math.sqrt(ratio) * (1 + 0.5 * rebirthCount))
+end
 
 -- ===== Zones =====
 -- Biome zones laid out in a line and linked by walkways. Each walkway ends in
@@ -345,27 +408,50 @@ function GameConfig.GetRebirthMultiplier(rebirthCount)
 	return 1 + (rebirthCount * GameConfig.Rebirth.MultiplierPerRebirth)
 end
 
-function GameConfig.GetMaxEquippedPets(rebirthCount)
+function GameConfig.GetMaxEquippedPets(rebirthCount, skills)
 	return math.min(GameConfig.MaxEquippedPets, GameConfig.BaseMaxEquippedPets + rebirthCount)
+		+ GameConfig.GetSkillLevel(skills, "PetSlots")
 end
 
--- Weighted random pet roll from an egg's pet pool.
-function GameConfig.RollPet(egg)
+-- Weighted random pet roll from an egg's pet pool. Egg Luck scales up every non-Common weight.
+function GameConfig.RollPet(egg, skills)
+	local luck = 1 + 0.1 * GameConfig.GetSkillLevel(skills, "EggLuck")
+	local function weight(pet)
+		return if pet.Rarity == "Common" then pet.Weight else pet.Weight * luck
+	end
 	local totalWeight = 0
 	for _, pet in ipairs(egg.Pets) do
-		totalWeight += pet.Weight
+		totalWeight += weight(pet)
 	end
 
 	local roll = math.random() * totalWeight
 	local cumulative = 0
 	for _, pet in ipairs(egg.Pets) do
-		cumulative += pet.Weight
+		cumulative += weight(pet)
 		if roll <= cumulative then
 			return pet
 		end
 	end
 
 	return egg.Pets[#egg.Pets]
+end
+
+-- Coins per click before combo/crit: base x pets x Ascension x Click Mastery.
+function GameConfig.GetClickPower(data, equippedPets)
+	return data.ClickPower * GameConfig.GetPetMultiplierTotal(equippedPets)
+		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
+		* (1 + 0.1 * GameConfig.GetSkillLevel(data.Skills, "ClickMastery"))
+end
+
+-- Coins per second from auto-clickers: base x pets x Ascension x Auto Power.
+function GameConfig.GetAutoIncome(data, equippedPets)
+	local perSecond = 0
+	for _, auto in ipairs(GameConfig.AutoClickers) do
+		perSecond += (data.AutoClickerLevels[auto.Id] or 0) * auto.CoinsPerSecond
+	end
+	return perSecond * GameConfig.GetPetMultiplierTotal(equippedPets)
+		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
+		* (1 + 0.2 * GameConfig.GetSkillLevel(data.Skills, "AutoPower"))
 end
 
 -- Multiplicative stack of every equipped pet's multiplier.

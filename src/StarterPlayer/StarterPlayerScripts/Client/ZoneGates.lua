@@ -9,7 +9,7 @@ local ZoneGates = {}
 
 function ZoneGates.Start()
 	local player = Players.LocalPlayer
-	local rebirths = player:WaitForChild("leaderstats"):WaitForChild("Rebirths")
+	local rebirths = player:WaitForChild("leaderstats"):WaitForChild("Ascensions") -- RebirthCount in the save
 	local gates = workspace:WaitForChild("Map"):WaitForChild("Gates")
 
 	local function refresh()

@@ -17,7 +17,8 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local ClickRemote = Remotes:WaitForChild("Click")
 local PurchaseUpgradeRemote = Remotes:WaitForChild("PurchaseUpgrade")
 local PurchaseAutoClickerRemote = Remotes:WaitForChild("PurchaseAutoClicker")
-local RebirthRemote = Remotes:WaitForChild("Rebirth")
+local AscendRemote = Remotes:WaitForChild("Ascend")
+local UnlockSkillRemote = Remotes:WaitForChild("UnlockSkill")
 local DataUpdatedRemote = Remotes:WaitForChild("DataUpdated")
 local HatchEggRemote = Remotes:WaitForChild("HatchEgg")
 local EquipPetRemote = Remotes:WaitForChild("EquipPet")
@@ -33,7 +34,9 @@ local currentData = {
 	ClickPower = GameConfig.StartingClickPower,
 	UpgradeLevels = {},
 	AutoClickerLevels = {},
-	RebirthCount = 0,
+	RebirthCount = 0, -- shown as Ascensions
+	Gems = 0,
+	Skills = {},
 	Pets = {},
 	EquippedPetUids = {},
 	HasPickedStarterPet = true, -- assume true until the server says otherwise, so the modal doesn't flash on load
@@ -75,8 +78,7 @@ local function getEquippedPets(data)
 end
 
 local function getClickPower(data)
-	local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
-	return data.ClickPower * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+	return GameConfig.GetClickPower(data, getEquippedPets(data))
 end
 
 -- Builds a small 3D preview of a pet model inside a ViewportFrame.
@@ -187,7 +189,7 @@ powerLabel.TextStrokeTransparency = 0.5
 powerLabel.Text = "+1 per click"
 powerLabel.Parent = screenGui
 
--- Rebirth button
+-- Ascend button (opens the Ascend panel)
 local rebirthButton = Instance.new("TextButton")
 rebirthButton.Name = "RebirthButton"
 rebirthButton.AnchorPoint = Vector2.new(0, 0.5)
@@ -197,7 +199,7 @@ rebirthButton.BackgroundColor3 = Color3.fromRGB(140, 50, 200)
 rebirthButton.Font = Enum.Font.FredokaOne
 rebirthButton.TextScaled = true
 rebirthButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-rebirthButton.Text = "Rebirth (0)"
+rebirthButton.Text = "Ascend (0)"
 rebirthButton.Parent = screenGui
 
 Instance.new("UICorner", rebirthButton).CornerRadius = UDim.new(0, 12)
@@ -207,7 +209,7 @@ local tabBar = Instance.new("Frame")
 tabBar.Name = "TabBar"
 tabBar.AnchorPoint = Vector2.new(0, 0.5)
 tabBar.Position = UDim2.new(0, 16, 0.5, -20)
-tabBar.Size = UDim2.new(0, 132, 0, 216)
+tabBar.Size = UDim2.new(0, 132, 0, 280)
 tabBar.BackgroundTransparency = 1
 tabBar.Parent = screenGui
 
@@ -316,6 +318,23 @@ end
 bindTab(shopToggle, shopFrame)
 bindTab(eggsToggle, eggsFrame)
 bindTab(petsToggle, petsFrame)
+
+-- Ascend panel, Skill Tree panel (+ SKILLS tab) and the HUD gem counter.
+local ascensionUI = require(script.AscensionUI).Build({
+	screenGui = screenGui,
+	coinFrame = coinFrame,
+	createPanel = createPanel,
+	createTabButton = createTabButton,
+	bindTab = bindTab,
+	panels = panels,
+	styleButton = styleButton,
+	formatNumber = formatNumber,
+	ascendRemote = AscendRemote,
+	unlockSkillRemote = UnlockSkillRemote,
+})
+Remotes:WaitForChild("OpenPanel").OnClientEvent:Connect(function(name)
+	ascensionUI.Open(name)
+end)
 
 -- ===== Shop (upgrades + auto-clickers) =====
 
@@ -739,7 +758,7 @@ local function refreshPets()
 		group.InfoLabel.Text = pet.Rarity .. " - " .. formatMultiplier(pet.Multiplier) .. " - Owned " .. info.Count
 		group.EquippedLabel.Text = "Equipped: " .. info.EquippedCount
 
-		local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount)
+		local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount, currentData.Skills)
 		if info.EquippedCount > 0 then
 			group.EquipButton.Text = "Unequip"
 			group.EquipButton.BackgroundColor3 = Color3.fromRGB(160, 60, 60)
@@ -1005,7 +1024,7 @@ local function refreshUI()
 	powerLabel.Text = "+" .. formatNumber(totalClickPower) .. " per click"
 
 	local requirement = GameConfig.GetRebirthRequirement(currentData.RebirthCount)
-	rebirthButton.Text = ("Rebirth (%d)\n%s coins"):format(currentData.RebirthCount, formatNumber(requirement))
+	rebirthButton.Text = ("Ascend (%d)\n%s coins"):format(currentData.RebirthCount, formatNumber(requirement))
 	rebirthButton.BackgroundColor3 = if currentData.Coins >= requirement
 		then Color3.fromRGB(185, 96, 247)
 		else Color3.fromRGB(127, 91, 189)
@@ -1013,12 +1032,13 @@ local function refreshUI()
 	refreshShop()
 	refreshEggs()
 	refreshPets()
+	ascensionUI.Refresh(currentData)
 end
 
 -- ===== Interactions =====
 
 -- Click anywhere on screen (not just a dedicated button). gameProcessedEvent
--- is true when the input already hit a GuiButton (Shop/Eggs/Pets/Rebirth/etc),
+-- is true when the input already hit a GuiButton (Shop/Eggs/Pets/Ascend/etc),
 -- so this only fires for clicks/taps on empty space.
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 	if gameProcessedEvent then
@@ -1033,7 +1053,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 end)
 
 rebirthButton.MouseButton1Click:Connect(function()
-	RebirthRemote:FireServer()
+	ascensionUI.Open("Ascend")
 end)
 
 DataUpdatedRemote.OnClientEvent:Connect(function(data)
@@ -1089,7 +1109,7 @@ local function showToast(text)
 end
 
 EggLockedRemote.OnClientEvent:Connect(function(eggName, requiredRebirths)
-	showToast(("Locked! Need %d Rebirth%s to hatch the %s"):format(
+	showToast(("Locked! Need %d Ascension%s to hatch the %s"):format(
 		requiredRebirths,
 		requiredRebirths == 1 and "" or "s",
 		eggName
@@ -1097,7 +1117,7 @@ EggLockedRemote.OnClientEvent:Connect(function(eggName, requiredRebirths)
 end)
 
 ZoneLockedRemote.OnClientEvent:Connect(function(zoneName, requiredRebirths)
-	showToast(("Locked! Need %d Rebirth%s to enter %s"):format(
+	showToast(("Locked! Need %d Ascension%s to enter %s"):format(
 		requiredRebirths,
 		requiredRebirths == 1 and "" or "s",
 		zoneName
@@ -1133,7 +1153,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 local tip=Instance.new("TextLabel") tip.Name="Tip" tip.BackgroundTransparency=1
  tip.AnchorPoint=Vector2.new(0.5,1) tip.Position=UDim2.new(0.5,0,1,-86)
- tip.Size=UDim2.fromOffset(280,23) tip.Text="TAP  •  HATCH  •  REBIRTH" tip.Font=Enum.Font.FredokaOne
+ tip.Size=UDim2.fromOffset(280,23) tip.Text="TAP  •  HATCH  •  ASCEND" tip.Font=Enum.Font.FredokaOne
  tip.TextSize=16 tip.TextColor3=Color3.new(1,1,1) tip.TextStrokeTransparency=0.3 tip.Parent=screenGui
 local panelScales={}
 for _,panel in ipairs(panels) do panelScales[panel]=Instance.new("UIScale",panel) end
@@ -1149,7 +1169,7 @@ local function resizeHUD()
  end
  for item,scale in pairs(hudScales) do scale.Scale=compact and 0.72 or 1 end
  rebirthButton.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and 100 or 130)
- tabBar.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and -10 or -20)
+ tabBar.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and -40 or -60)
  powerLabel.Position=UDim2.new(0.5,0,0,compact and 55 or 74)
  toastFrame.Size=UDim2.new(0,math.min(420,size.X-24),0,50)
 end
@@ -1215,7 +1235,7 @@ local function nextGoal(data)
  if not next(data.UpgradeLevels) then objective.Text="FIRST GOAL • Buy Better Clicks for 10 coins"
  elseif #data.Pets==0 then objective.Text="NEXT • Hatch a Basic Egg for "..GameConfig.Eggs[1].Cost.." coins"
  elseif not next(data.AutoClickerLevels) then objective.Text="NEXT • Buy a Clicking Bot for 25 coins"
- else objective.Text="REBIRTH • "..formatNumber(data.Coins).." / "..formatNumber(GameConfig.GetRebirthRequirement(data.RebirthCount)).." coins" end
+ else objective.Text="ASCEND • "..formatNumber(data.Coins).." / "..formatNumber(GameConfig.GetRebirthRequirement(data.RebirthCount)).." coins" end
 end
 nextGoal(currentData)
 DataUpdatedRemote.OnClientEvent:Connect(nextGoal)
@@ -1249,7 +1269,7 @@ EggResultRemote.OnClientEvent:Connect(function(pet)
 end)
 Remotes.Feedback.OnClientEvent:Connect(function(kind,message)
  showToast(message)
- if kind=="Rebirth" then celebrate("Epic") elseif kind=="Purchase" then playSound("Purchase") end
+ if kind=="Ascend" then celebrate("Epic") elseif kind=="Purchase" then playSound("Purchase") end
 end)
 Remotes.Announcement.OnClientEvent:Connect(function(message,rarity)
  showToast(message) toastFrame.BackgroundColor3=GameConfig.RarityColors[rarity] or Color3.fromRGB(130,78,200)

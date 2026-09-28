@@ -138,7 +138,7 @@ function MapBuilder.Build()
   end
  end
 
- -- Walkway decks and rebirth gates. Gates are solid on the server; each client makes the gates it
+ -- Walkway decks and Ascension gates. Gates are solid on the server; each client makes the gates it
  -- has unlocked non-solid for its own character (see Client/ZoneGates.lua).
  local gates={}
  for i=2,#placed do
@@ -152,7 +152,7 @@ function MapBuilder.Build()
   gate.Transparency=0.3 gate:SetAttribute('Zone',zone.Id) gate:SetAttribute('ZoneName',zone.Name)
   gate:SetAttribute('RequiredRebirths',zone.RequiredRebirths)
   local sign=part(gatesFolder,zone.Id..'GateSign',V(1,1,1),V(0,26,gateZ),color) sign.Transparency=1 sign.CanCollide=false sign.CanQuery=false
-  label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' rebirth'..(zone.RequiredRebirths==1 and '' or 's'),160)
+  label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' Ascension'..(zone.RequiredRebirths==1 and '' or 's'),160)
   table.insert(gates,gate)
  end
 
@@ -165,7 +165,7 @@ function MapBuilder.Build()
  pad('SpawnRing',V(0,1.2,40),C(68,219,238))
  local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,5,10),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
  label(orb,'CLICK TO EARN')
- local altar=pad('RebirthAltar',V(49,1.5,0),C(177,104,240)) label(altar,'REBIRTH\nPermanent power')
+ local altar=pad('RebirthAltar',V(49,1.5,0),C(177,104,240)) label(altar,'ASCEND\nGems + permanent power')
  place(library.Forest['Extra Portal']:GetChildren()[1],zones,'RebirthShrine',V(49,1,0),18)
 
  -- Egg stands: one glass capsule from the pack per egg (Candy/Space reuse the Forest capsule),
@@ -192,7 +192,7 @@ function MapBuilder.Build()
   local cf,size=m:GetBoundingBox()
   local p=part(interactive,egg.Id,size+V(1,1,1),cf.Position,SOURCES[egg.Zone].color) p.CFrame=cf
   p.Transparency=1 p.CanCollide=false p:SetAttribute('Zone',egg.Zone)
-  label(p,egg.Name..'\n'..short(egg.Cost)..' coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' rebirths' or ''))
+  label(p,egg.Name..'\n'..short(egg.Cost)..' coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' Ascensions' or ''))
   eggs[egg.Id]=p
  end
 

@@ -13,7 +13,7 @@ end
 function Boards.Start(PlayerData)
  local folder=Instance.new('Folder') folder.Name='GlobalLeaderboards' folder.Parent=workspace.Map
  local rows={}
- for index,title in ipairs({'GLOBAL REBIRTHS','GLOBAL LIFETIME COINS'}) do
+ for index,title in ipairs({'GLOBAL ASCENSIONS','GLOBAL LIFETIME COINS'}) do
   local board=Instance.new('Part') board.Name=title board.Size=Vector3.new(27,19,1)
   board.Position=Vector3.new(index==1 and -32 or 32,12,76) board.Anchored=true
   board.Material=Enum.Material.Slate board.Color=Color3.fromRGB(25,39,59) board.Parent=folder

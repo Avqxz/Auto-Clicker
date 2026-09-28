@@ -7,7 +7,7 @@ local PlayerData = {Cache={}, Sessions={}, Saving={}}
 local Store = DSS:GetDataStore('ClickingSimulator_PlayerData_v1')
 local OWNER = game.JobId ~= '' and game.JobId or HttpService:GenerateGUID(false)
 local LEASE = 180
-local DEFAULT = {Coins=0,ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalCoinsEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false}
+local DEFAULT = {Coins=0,ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalCoinsEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={}}
 local function copy(t)
  local out={} for k,v in pairs(t) do out[k]=type(v)=='table' and copy(v) or v end return out
 end
@@ -49,6 +49,7 @@ function PlayerData.Save(player,release)
  while PlayerData.Saving[id] do task.wait(0.1) end
  if not PlayerData.Cache[id] then return false end
  PlayerData.Saving[id]=true
+ PlayerData.Cache[id].LastOnline=os.time() -- for the Offline Earnings skill
  local snapshot=copy(PlayerData.Cache[id]) local saved=false local lost=false
  for attempt=1,3 do
   local ok,value=pcall(function()

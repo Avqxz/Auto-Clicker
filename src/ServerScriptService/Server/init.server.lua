@@ -1,5 +1,5 @@
 -- Server bootstrap for the Clicking Simulator.
--- Owns all game state mutation: clicks, purchases, pets/eggs, rebirths, autosaving,
+-- Owns all game state mutation: clicks, purchases, pets/eggs, Ascension + skills, autosaving,
 -- and builds the map + pet-follower presentation.
 
 local Players = game:GetService("Players")
@@ -32,7 +32,9 @@ end
 local ClickRemote = createRemoteEvent("Click")
 local PurchaseUpgradeRemote = createRemoteEvent("PurchaseUpgrade")
 local PurchaseAutoClickerRemote = createRemoteEvent("PurchaseAutoClicker")
-local RebirthRemote = createRemoteEvent("Rebirth")
+local AscendRemote = createRemoteEvent("Ascend")
+local UnlockSkillRemote = createRemoteEvent("UnlockSkill")
+local OpenPanelRemote = createRemoteEvent("OpenPanel")
 local DataUpdatedRemote = createRemoteEvent("DataUpdated")
 local HatchEggRemote = createRemoteEvent("HatchEgg")
 local EquipPetRemote = createRemoteEvent("EquipPet")
@@ -78,7 +80,7 @@ local function updateLeaderstats(player)
 		return
 	end
 	leaderstats.Coins.Value = math.floor(data.Coins)
-	leaderstats.Rebirths.Value = data.RebirthCount
+	leaderstats.Ascensions.Value = data.RebirthCount
 end
 
 local function setupLeaderstats(player, data)
@@ -90,10 +92,10 @@ local function setupLeaderstats(player, data)
 	coins.Value = math.floor(data.Coins)
 	coins.Parent = leaderstats
 
-	local rebirths = Instance.new("IntValue")
-	rebirths.Name = "Rebirths"
-	rebirths.Value = data.RebirthCount
-	rebirths.Parent = leaderstats
+	local ascensions = Instance.new("IntValue")
+	ascensions.Name = "Ascensions" -- stored as RebirthCount in the save
+	ascensions.Value = data.RebirthCount
+	ascensions.Parent = leaderstats
 
 	leaderstats.Parent = player
 end
@@ -122,8 +124,7 @@ local function getEquippedPets(data)
 end
 
 local function getClickPower(data)
-	local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
-	return data.ClickPower * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+	return GameConfig.GetClickPower(data, getEquippedPets(data))
 end
 
 local function refreshFollowers(player, data)
@@ -137,6 +138,21 @@ Players.PlayerAdded:Connect(function(player)
  if not data then return end
  if not player.Parent then PlayerData.Release(player) return end
 	setupLeaderstats(player, data)
+
+	-- Offline Earnings skill: a share of auto income for the time since the last save (capped).
+	local offlineRate = 0.1 * GameConfig.GetSkillLevel(data.Skills, "OfflineEarnings")
+	if offlineRate > 0 and data.LastOnline then
+		local seconds = math.clamp(os.time() - data.LastOnline, 0, GameConfig.OfflineCapSeconds)
+		local offline = math.floor(GameConfig.GetAutoIncome(data, getEquippedPets(data)) * seconds * offlineRate)
+		if offline > 0 then
+			earn(data, offline)
+			updateLeaderstats(player)
+			task.delay(3, function() -- after the client UI is up
+				FeedbackRemote:FireClient(player, "Purchase", "Welcome back! +" .. offline .. " coins earned offline")
+			end)
+		end
+	end
+
 	pushData(player)
 	refreshFollowers(player, data)
 end)
@@ -175,9 +191,10 @@ local function handleClick(player)
 	combo.Count += 1
 	combo.Last = now
 
-	local tier = GameConfig.GetComboTier(combo.Count)
-	local crit = math.random() < GameConfig.GetCritChance(levels)
-	local earned = getClickPower(data) * tier.Multiplier * (if crit then GameConfig.GetCritDamage(levels) else 1)
+	local skills = data.Skills
+	local crit = math.random() < GameConfig.GetCritChance(levels, skills)
+	local earned = getClickPower(data) * GameConfig.GetComboMultiplier(combo.Count, skills)
+		* (if crit then GameConfig.GetCritDamage(levels, skills) else 1)
 	earn(data,earned)
 
 	ClickResultRemote:FireClient(player, earned, crit, combo.Count)
@@ -267,7 +284,7 @@ local function handleHatchEgg(player, eggId)
  data.Coins -= egg.Cost
  data.EggsHatched=(data.EggsHatched or 0)+1
 
-	local rolled = GameConfig.RollPet(egg)
+	local rolled = GameConfig.RollPet(egg, data.Skills)
 	local uid = data.NextPetUid
 	data.NextPetUid += 1
 
@@ -281,7 +298,7 @@ local function handleHatchEgg(player, eggId)
 	table.insert(data.Pets, newPet)
 
 	local equipChanged = false
-	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount) then
+	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
 		table.insert(data.EquippedPetUids, uid)
 		equipChanged = true
 	end
@@ -340,7 +357,7 @@ EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 		return
 	end
 
-	if #data.EquippedPetUids >= GameConfig.GetMaxEquippedPets(data.RebirthCount) then
+	if #data.EquippedPetUids >= GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
 		return
 	end
 
@@ -427,12 +444,12 @@ FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
 		Uid = uid,
 		Name = name,
 		Rarity = rarity,
-		Multiplier = fusedMultiplier * 2,
+		Multiplier = fusedMultiplier * (2 + 0.25 * GameConfig.GetSkillLevel(data.Skills, "GoldenTouch")),
 		Golden = true,
 	}
 	table.insert(data.Pets, goldenPet)
 
-	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount) then
+	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
 		table.insert(data.EquippedPetUids, uid)
 	end
 
@@ -441,10 +458,10 @@ FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
 	refreshFollowers(player, data)
 end)
 
--- ===== Rebirth =====
+-- ===== Ascension (saved as RebirthCount) & skill tree =====
 
-local function handleRebirth(player)
- if not allow(player,"rebirth",0.5) then return end
+local function handleAscend(player)
+	if not allow(player, "ascend", 0.5) then return end
 	local data = PlayerData.Get(player)
 	if not data then
 		return
@@ -455,19 +472,51 @@ local function handleRebirth(player)
 		return
 	end
 
-	-- Pets are a permanent collection and carry over through rebirth.
-	data.Coins = 0
+	-- Resets coins, click power, upgrades and auto-clickers. Pets, Gems and skills are permanent.
+	local gems = GameConfig.GetAscensionGems(data.Coins, data.RebirthCount)
+	data.Gems = (data.Gems or 0) + gems
+	local headStart = GameConfig.GetSkillLevel(data.Skills, "HeadStart")
+	data.Coins = 500 * headStart * headStart
 	data.ClickPower = GameConfig.StartingClickPower
 	data.UpgradeLevels = {}
 	data.AutoClickerLevels = {}
 	data.RebirthCount += 1
- FeedbackRemote:FireClient(player,"Rebirth","REBIRTH! Permanent multiplier x"..GameConfig.GetRebirthMultiplier(data.RebirthCount))
+	FeedbackRemote:FireClient(player, "Ascend", "ASCENDED! +" .. gems .. " Gems • Power x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount))
 
 	updateLeaderstats(player)
 	pushData(player)
 end
 
-RebirthRemote.OnServerEvent:Connect(handleRebirth)
+AscendRemote.OnServerEvent:Connect(handleAscend)
+
+UnlockSkillRemote.OnServerEvent:Connect(function(player, skillId)
+	if type(skillId) ~= "string" or not allow(player, "skill", 0.15) then return end
+	local data = PlayerData.Get(player)
+	local node = GameConfig.GetSkill(skillId)
+	if not data or not node then
+		return
+	end
+	data.Skills = data.Skills or {}
+	local level = data.Skills[skillId] or 0
+	if level >= node.MaxLevel then
+		return
+	end
+	if node.Requires and (data.Skills[node.Requires] or 0) < 1 then
+		return
+	end
+	local cost = GameConfig.GetSkillCost(node, level)
+	if (data.Gems or 0) < cost then
+		return
+	end
+
+	data.Gems -= cost
+	data.Skills[skillId] = level + 1
+	FeedbackRemote:FireClient(player, "Purchase", node.Name .. " → level " .. (level + 1))
+	pushData(player)
+	if skillId == "PetSlots" then
+		refreshFollowers(player, data)
+	end
+end)
 
 -- ===== In-world interactions (ClickDetectors on the map) =====
 
@@ -479,7 +528,9 @@ local function addClickDetector(part, maxDistance)
 end
 
 addClickDetector(mapRefs.ClickOrb).MouseClick:Connect(handleClick)
-addClickDetector(mapRefs.RebirthAltar).MouseClick:Connect(handleRebirth)
+addClickDetector(mapRefs.RebirthAltar).MouseClick:Connect(function(player)
+	OpenPanelRemote:FireClient(player, "Ascend") -- confirm in the Ascend panel rather than ascending on one click
+end)
 
 for eggId, eggPart in pairs(mapRefs.EggParts) do
 	addClickDetector(eggPart).MouseClick:Connect(function(player)
@@ -523,15 +574,8 @@ RunService.Heartbeat:Connect(function(dt)
 	for _, player in ipairs(Players:GetPlayers()) do
 		local data = PlayerData.Get(player)
 		if data then
-			local coinsPerSecond = 0
-			for _, auto in ipairs(GameConfig.AutoClickers) do
-				local level = data.AutoClickerLevels[auto.Id] or 0
-				coinsPerSecond += level * auto.CoinsPerSecond
-			end
-
-			if coinsPerSecond > 0 then
-				local petMultiplier = GameConfig.GetPetMultiplierTotal(getEquippedPets(data))
-				local earned = coinsPerSecond * petMultiplier * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+			local earned = GameConfig.GetAutoIncome(data, getEquippedPets(data))
+			if earned > 0 then
 				earn(data,earned)
 				updateLeaderstats(player)
 				pushData(player)
