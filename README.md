@@ -12,7 +12,8 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Click to earn** — click the big button to earn coins based on your total click power.
 - **Pets & eggs** — spend coins to hatch eggs; each egg has a weighted pool of pets with different rarities (Common → Mythic) and multipliers. Equip pets to multiply your click power and passive income.
 - **Pet fusion** — collect 5 duplicates of the same (non-Golden) pet and fuse them into a Golden version worth 2x the multiplier.
-- **Upgrades** — spend coins to permanently increase base coins earned per click.
+- **Combo & crits** — consecutive clicks inside the combo window build a combo (x1.25 at 25, x1.5 at 50, x2 at 100, **OVERDRIVE** x3 at 200, with a glowing screen edge and sparks); every click can crit. Results are computed on the server and shown as floating "+N ⚡" numbers beside the character. Holding the CLICK button auto-clicks at 5/sec.
+- **Upgrades** — spend coins to increase coins per click, plus Critical Chance / Critical Damage / Combo Duration boosts; buy x1, x10 or MAX at a time.
 - **Auto-clickers** — spend coins on passive generators that earn coins every second, even between clicks (also boosted by equipped pets).
 - **Rebirth** — reset your coins, upgrades, and base click power in exchange for a permanent earnings multiplier and an extra pet-equip slot. Pets are a permanent collection and carry over through rebirth.
 - **Leaderboard** — Coins and Rebirths show up in Roblox's built-in leaderboard (`leaderstats`).
@@ -44,6 +45,7 @@ src/
   ServerScriptService/Server/PetFollowers.lua           # Spawns/animates the equipped pets that orbit each player
   StarterPlayer/StarterPlayerScripts/Client/init.client.lua  # Builds the HUD/Shop/Eggs/Pets UI and talks to the server
   StarterPlayer/StarterPlayerScripts/Client/ZoneGates.lua    # Opens the zone gates the local player has unlocked
+  StarterPlayer/StarterPlayerScripts/Client/ClickFeel.lua    # Floating click numbers, combo meter and OVERDRIVE effects
 ```
 
 ## Running it in Roblox Studio

@@ -69,6 +69,94 @@ GameConfig.Upgrades = {
 	},
 }
 
+-- ===== Click feel: combo, crits =====
+-- Consecutive clicks within the combo window build a combo; higher combos multiply every click.
+-- Crits roll per click. All of this is computed on the server (see handleClick).
+
+GameConfig.Combo = {
+	BaseWindow = 1.0, -- seconds allowed between clicks before the combo resets
+	Tiers = { -- first tier whose MinCombo the combo count reaches (checked from the top)
+		{ MinCombo = 200, Name = "OVERDRIVE", Multiplier = 3, Color = Color3.fromRGB(255, 96, 48) },
+		{ MinCombo = 100, Name = "x2", Multiplier = 2, Color = Color3.fromRGB(255, 190, 40) },
+		{ MinCombo = 50, Name = "x1.5", Multiplier = 1.5, Color = Color3.fromRGB(180, 110, 255) },
+		{ MinCombo = 25, Name = "x1.25", Multiplier = 1.25, Color = Color3.fromRGB(80, 200, 255) },
+		{ MinCombo = 0, Name = "x1", Multiplier = 1, Color = Color3.fromRGB(255, 255, 255) },
+	},
+}
+
+GameConfig.Crit = {
+	BaseChance = 0.05,
+	BaseDamage = 2,
+}
+
+GameConfig.HoldClicksPerSecond = 5 -- holding the CLICK button; kept below fast manual clicking
+
+-- Click boosts share UpgradeLevels with the click-power upgrades, so they reset on rebirth too.
+GameConfig.ClickBoosts = {
+	{
+		Id = "CritChance",
+		Name = "Critical Chance",
+		BaseCost = 150,
+		CostMultiplier = 1.35,
+		MaxLevel = 25,
+		PerLevel = 0.01,
+	},
+	{
+		Id = "CritDamage",
+		Name = "Critical Damage",
+		BaseCost = 400,
+		CostMultiplier = 1.3,
+		MaxLevel = 40,
+		PerLevel = 0.1,
+	},
+	{
+		Id = "ComboWindow",
+		Name = "Combo Duration",
+		BaseCost = 250,
+		CostMultiplier = 1.4,
+		MaxLevel = 15,
+		PerLevel = 0.1,
+	},
+}
+
+function GameConfig.GetCritChance(levels)
+	return GameConfig.Crit.BaseChance + (levels.CritChance or 0) * GameConfig.ClickBoosts[1].PerLevel
+end
+
+function GameConfig.GetCritDamage(levels)
+	return GameConfig.Crit.BaseDamage + (levels.CritDamage or 0) * GameConfig.ClickBoosts[2].PerLevel
+end
+
+function GameConfig.GetComboWindow(levels)
+	return GameConfig.Combo.BaseWindow + (levels.ComboWindow or 0) * GameConfig.ClickBoosts[3].PerLevel
+end
+
+function GameConfig.GetComboTier(comboCount)
+	for _, tier in ipairs(GameConfig.Combo.Tiers) do
+		if comboCount >= tier.MinCombo then
+			return tier
+		end
+	end
+	return GameConfig.Combo.Tiers[#GameConfig.Combo.Tiers]
+end
+
+-- "current → next" text for a click boost at `level`.
+function GameConfig.DescribeBoost(item, level)
+	local function value(l)
+		local levels = { [item.Id] = l }
+		if item.Id == "CritChance" then
+			return string.format("%d%%", math.floor(GameConfig.GetCritChance(levels) * 100 + 0.5))
+		elseif item.Id == "CritDamage" then
+			return string.format("%.1fx", GameConfig.GetCritDamage(levels))
+		end
+		return string.format("%.1f sec", GameConfig.GetComboWindow(levels))
+	end
+	if level >= item.MaxLevel then
+		return value(level) .. " (MAX)"
+	end
+	return value(level) .. " → " .. value(level + 1)
+end
+
 GameConfig.AutoClickers = {
 	{
 		Id = "Auto1",
@@ -224,6 +312,29 @@ GameConfig.Eggs = {
 -- Works for both Upgrades and AutoClickers since they share BaseCost/CostMultiplier.
 function GameConfig.GetCost(item, currentLevel)
 	return math.floor(item.BaseCost * (item.CostMultiplier ^ currentLevel))
+end
+
+-- Total cost of buying `count` levels starting at `currentLevel`.
+function GameConfig.GetBulkCost(item, currentLevel, count)
+	local total = 0
+	for i = 0, count - 1 do
+		total += GameConfig.GetCost(item, currentLevel + i)
+	end
+	return total
+end
+
+-- How many levels (capped at `cap`) can be bought with `coins`, and what they cost.
+function GameConfig.GetMaxAffordable(item, currentLevel, coins, cap)
+	local count, total = 0, 0
+	while count < cap do
+		local nextCost = GameConfig.GetCost(item, currentLevel + count)
+		if total + nextCost > coins then
+			break
+		end
+		total += nextCost
+		count += 1
+	end
+	return count, total
 end
 
 function GameConfig.GetRebirthRequirement(rebirthCount)

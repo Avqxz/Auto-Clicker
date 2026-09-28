@@ -41,6 +41,7 @@ local FusePetsRemote = createRemoteEvent("FusePets")
 local EggResultRemote = createRemoteEvent("EggResult")
 local EggLockedRemote = createRemoteEvent("EggLocked")
 local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
+local ClickResultRemote = createRemoteEvent("ClickResult")
 local PickStarterPetRemote = createRemoteEvent("PickStarterPet")
 
 local FeedbackRemote=createRemoteEvent("Feedback")
@@ -49,6 +50,7 @@ local RedeemCodeRemote=createRemoteEvent("RedeemCode")
 local RequestDataRemote=createRemoteEvent("RequestData")
 local PromoCodes=require(script.PromoCodes)
 local lastClickTimes = {}
+local comboStates = {} -- [userId] = { Count, Last }
 local limits={}
 local function allow(player,key,seconds)
  local id=player.UserId limits[id]=limits[id] or {}
@@ -143,10 +145,13 @@ Players.PlayerRemoving:Connect(function(player)
 	PlayerData.Release(player)
 	PetFollowers.Clear(player)
 	lastClickTimes[player.UserId] = nil
+	comboStates[player.UserId] = nil
  limits[player.UserId]=nil
 end)
 
 -- ===== Clicking =====
+-- Each click extends the player's combo (if it lands within the combo window), picks up the
+-- combo tier's multiplier, and rolls for a crit. The client only displays the result.
 
 local function handleClick(player)
 	local now = os.clock()
@@ -161,9 +166,21 @@ local function handleClick(player)
 		return
 	end
 
-	local earned = getClickPower(data)
+	local levels = data.UpgradeLevels
+	local combo = comboStates[player.UserId]
+	if not combo or now - combo.Last > GameConfig.GetComboWindow(levels) then
+		combo = { Count = 0 }
+		comboStates[player.UserId] = combo
+	end
+	combo.Count += 1
+	combo.Last = now
+
+	local tier = GameConfig.GetComboTier(combo.Count)
+	local crit = math.random() < GameConfig.GetCritChance(levels)
+	local earned = getClickPower(data) * tier.Multiplier * (if crit then GameConfig.GetCritDamage(levels) else 1)
 	earn(data,earned)
 
+	ClickResultRemote:FireClient(player, earned, crit, combo.Count)
 	updateLeaderstats(player)
 	pushData(player)
 end
@@ -172,51 +189,48 @@ ClickRemote.OnServerEvent:Connect(handleClick)
 
 -- ===== Purchases =====
 
-PurchaseUpgradeRemote.OnServerEvent:Connect(function(player, upgradeId)
- if type(upgradeId)~="string" or not allow(player,"purchase",0.12) then return end
+-- `amount` is 1, 10 or "max"; buys as many of those levels as the player can afford.
+local function buyLevels(player, list, levelsKey, id, amount, onLevel)
+	if type(id) ~= "string" or not allow(player, "purchase", 0.12) then return end
+	if amount ~= 1 and amount ~= 10 and amount ~= "max" then return end
 	local data = PlayerData.Get(player)
-	local upgrade = findById(GameConfig.Upgrades, upgradeId)
-	if not data or not upgrade then
+	local item = data and findById(list, id)
+	if not item then
 		return
 	end
 
-	local currentLevel = data.UpgradeLevels[upgradeId] or 0
-	if currentLevel>=GameConfig.MaxUpgradeLevel then return end
- local cost = GameConfig.GetCost(upgrade, currentLevel)
-	if data.Coins < cost then
-		return
+	local levels = data[levelsKey]
+	local currentLevel = levels[id] or 0
+	local cap = math.max(0, (item.MaxLevel or GameConfig.MaxUpgradeLevel) - currentLevel)
+	local wanted = if amount == "max" then cap else math.min(amount, cap)
+	local count, cost = GameConfig.GetMaxAffordable(item, currentLevel, data.Coins, wanted)
+	if count == 0 or (amount ~= "max" and count < wanted) then
+		return -- x1/x10 buy all-or-nothing; MAX buys whatever fits
 	end
 
 	data.Coins -= cost
-	data.UpgradeLevels[upgradeId] = currentLevel + 1
-	data.ClickPower += upgrade.ClickPowerAdd
- FeedbackRemote:FireClient(player,"Purchase","Upgrade purchased!")
+	levels[id] = currentLevel + count
+	if onLevel then onLevel(data, item, count) end
+	FeedbackRemote:FireClient(player, "Purchase", item.Name .. (if count > 1 then " x" .. count else "") .. " purchased!")
 
 	updateLeaderstats(player)
 	pushData(player)
+end
+
+local upgradeCatalog = {}
+for _, item in ipairs(GameConfig.Upgrades) do table.insert(upgradeCatalog, item) end
+for _, item in ipairs(GameConfig.ClickBoosts) do table.insert(upgradeCatalog, item) end
+
+PurchaseUpgradeRemote.OnServerEvent:Connect(function(player, upgradeId, amount)
+	buyLevels(player, upgradeCatalog, "UpgradeLevels", upgradeId, amount or 1, function(data, item, count)
+		if item.ClickPowerAdd then
+			data.ClickPower += item.ClickPowerAdd * count
+		end
+	end)
 end)
 
-PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId)
- if type(autoId)~="string" or not allow(player,"purchase",0.12) then return end
-	local data = PlayerData.Get(player)
-	local auto = findById(GameConfig.AutoClickers, autoId)
-	if not data or not auto then
-		return
-	end
-
-	local currentLevel = data.AutoClickerLevels[autoId] or 0
-	if currentLevel>=GameConfig.MaxUpgradeLevel then return end
- local cost = GameConfig.GetCost(auto, currentLevel)
-	if data.Coins < cost then
-		return
-	end
-
-	data.Coins -= cost
-	data.AutoClickerLevels[autoId] = currentLevel + 1
- FeedbackRemote:FireClient(player,"Purchase","Auto-clicker purchased!")
-
-	updateLeaderstats(player)
-	pushData(player)
+PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId, amount)
+	buyLevels(player, GameConfig.AutoClickers, "AutoClickerLevels", autoId, amount or 1)
 end)
 
 -- ===== Pets & eggs =====

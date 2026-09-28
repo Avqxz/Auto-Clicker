@@ -320,6 +320,37 @@ bindTab(petsToggle, petsFrame)
 -- ===== Shop (upgrades + auto-clickers) =====
 
 local shopEntries = {}
+local buyAmount = 1 -- 1, 10 or "max"; shared by every shop entry
+
+-- x1 / x10 / MAX selector at the top of the shop.
+local amountBar = Instance.new("Frame")
+amountBar.Name = "BuyAmount"
+amountBar.Size = UDim2.new(1, 0, 0, 40)
+amountBar.BackgroundTransparency = 1
+amountBar.LayoutOrder = -1
+amountBar.Parent = shopScroll
+local amountLayout = Instance.new("UIListLayout", amountBar)
+amountLayout.FillDirection = Enum.FillDirection.Horizontal
+amountLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+amountLayout.Padding = UDim.new(0, 10)
+local amountButtons = {}
+local refreshShop -- defined below; the selector refreshes the shop
+for _, option in ipairs({ { 1, "x1" }, { 10, "x10" }, { "max", "MAX" } }) do
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(96, 36)
+	b.Font = Enum.Font.FredokaOne
+	b.TextScaled = true
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Text = option[2]
+	b.Parent = amountBar
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+	styleButton(b)
+	amountButtons[option[1]] = b
+	b.MouseButton1Click:Connect(function()
+		buyAmount = option[1]
+		refreshShop()
+	end)
+end
 
 local function createShopEntry(item, kind, layoutOrder)
 	local frame = Instance.new("Frame")
@@ -350,7 +381,7 @@ local function createShopEntry(item, kind, layoutOrder)
 	descLabel.TextScaled = true
 	descLabel.TextXAlignment = Enum.TextXAlignment.Left
 	descLabel.TextColor3 = Color3.fromRGB(58, 90, 105)
-	descLabel.Text = item.Description
+	descLabel.Text = item.Description or ""
 	descLabel.Parent = frame
 
 	local levelLabel = Instance.new("TextLabel")
@@ -381,10 +412,10 @@ local function createShopEntry(item, kind, layoutOrder)
 	Instance.new("UICorner", buyButton).CornerRadius = UDim.new(0, 8)
 
 	buyButton.MouseButton1Click:Connect(function()
-		if kind == "upgrade" then
-			PurchaseUpgradeRemote:FireServer(item.Id)
+		if kind == "auto" then
+			PurchaseAutoClickerRemote:FireServer(item.Id, buyAmount)
 		else
-			PurchaseAutoClickerRemote:FireServer(item.Id)
+			PurchaseUpgradeRemote:FireServer(item.Id, buyAmount)
 		end
 	end)
 
@@ -392,6 +423,7 @@ local function createShopEntry(item, kind, layoutOrder)
 		Item = item,
 		Kind = kind,
 		LevelLabel = levelLabel,
+		DescLabel = descLabel,
 		BuyButton = buyButton,
 	}
 end
@@ -402,23 +434,48 @@ do
 		order += 1
 		createShopEntry(upgrade, "upgrade", order)
 	end
+	for _, boost in ipairs(GameConfig.ClickBoosts) do
+		order += 1
+		createShopEntry(boost, "boost", order)
+	end
 	for _, auto in ipairs(GameConfig.AutoClickers) do
 		order += 1
 		createShopEntry(auto, "auto", order)
 	end
 end
 
-local function refreshShop()
+function refreshShop()
+	for amount, b in pairs(amountButtons) do
+		b.BackgroundColor3 = if amount == buyAmount then Color3.fromRGB(0, 196, 237) else Color3.fromRGB(152, 174, 184)
+	end
 	for id, entry in pairs(shopEntries) do
-		local levels = if entry.Kind == "upgrade" then currentData.UpgradeLevels else currentData.AutoClickerLevels
+		local levels = if entry.Kind == "auto" then currentData.AutoClickerLevels else currentData.UpgradeLevels
 		local level = levels[id] or 0
-		local cost = GameConfig.GetCost(entry.Item, level)
+		local cap = math.max(0, (entry.Item.MaxLevel or GameConfig.MaxUpgradeLevel) - level)
+		local count, cost
+		if buyAmount == "max" then
+			count, cost = GameConfig.GetMaxAffordable(entry.Item, level, currentData.Coins, cap)
+			if count == 0 then
+				count, cost = math.min(1, cap), GameConfig.GetCost(entry.Item, level) -- show the next level's price
+			end
+		else
+			count = math.min(buyAmount, cap)
+			cost = GameConfig.GetBulkCost(entry.Item, level, count)
+		end
 
 		entry.LevelLabel.Text = "Level " .. level
-		entry.BuyButton.Text = formatNumber(cost)
-		entry.BuyButton.BackgroundColor3 = if currentData.Coins >= cost
-			then Color3.fromRGB(88, 219, 132)
-			else Color3.fromRGB(152, 174, 184)
+		if entry.Kind == "boost" then
+			entry.DescLabel.Text = GameConfig.DescribeBoost(entry.Item, level)
+		end
+		if cap == 0 then
+			entry.BuyButton.Text = "MAX"
+			entry.BuyButton.BackgroundColor3 = Color3.fromRGB(152, 174, 184)
+		else
+			entry.BuyButton.Text = (if count > 1 then "x" .. count .. " " else "") .. formatNumber(cost)
+			entry.BuyButton.BackgroundColor3 = if currentData.Coins >= cost
+				then Color3.fromRGB(88, 219, 132)
+				else Color3.fromRGB(152, 174, 184)
+		end
 	end
 end
 
@@ -833,6 +890,7 @@ starterPetFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 starterPetFrame.Size = UDim2.new(0, 460, 0, 320)
 starterPetFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
 starterPetFrame.Visible = false
+starterPetFrame.ZIndex = 20 -- above the HUD (CLICK button, goal banner, combo meter) so Pick! stays clickable
 starterPetFrame.Parent = screenGui
 
 Instance.new("UICorner", starterPetFrame).CornerRadius = UDim.new(0, 16)
@@ -959,37 +1017,6 @@ end
 
 -- ===== Interactions =====
 
--- Floating "+N" popup that appears where the player clicked/tapped, since
--- there's no dedicated click button to animate anymore.
-local function spawnClickFeedback(screenPosition, amount)
-	local label = Instance.new("TextLabel")
-	label.AnchorPoint = Vector2.new(0.5, 0.5)
-	label.Position = UDim2.fromOffset(screenPosition.X, screenPosition.Y)
-	label.Size = UDim2.fromOffset(140, 40)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.FredokaOne
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(255, 215, 60)
-	label.TextStrokeTransparency = 0.4
-	label.Text = "+" .. formatNumber(amount)
-	label.ZIndex = 10
-	label.Parent = screenGui
-
-	local tween = TweenService:Create(
-		label,
-		TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{
-			Position = UDim2.fromOffset(screenPosition.X, screenPosition.Y - 60),
-			TextTransparency = 1,
-			TextStrokeTransparency = 1,
-		}
-	)
-	tween:Play()
-	tween.Completed:Connect(function()
-		label:Destroy()
-	end)
-end
-
 -- Click anywhere on screen (not just a dedicated button). gameProcessedEvent
 -- is true when the input already hit a GuiButton (Shop/Eggs/Pets/Rebirth/etc),
 -- so this only fires for clicks/taps on empty space.
@@ -1002,8 +1029,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 		return
 	end
 
-	ClickRemote:FireServer()
-	spawnClickFeedback(Vector2.new(input.Position.X, input.Position.Y), getClickPower(currentData))
+	ClickRemote:FireServer() -- the result (amount, crit, combo) comes back via ClickResult
 end)
 
 rebirthButton.MouseButton1Click:Connect(function()
@@ -1092,7 +1118,18 @@ tapButton.TextColor3=Color3.new(1,1,1) tapButton.TextScaled=true tapButton.Paren
 Instance.new("UICorner",tapButton).CornerRadius=UDim.new(0,18) styleButton(tapButton)
 tapButton.Activated:Connect(function()
  ClickRemote:FireServer()
- spawnClickFeedback(tapButton.AbsolutePosition+tapButton.AbsoluteSize/2,getClickPower(currentData))
+end)
+-- Hold-to-click: after a short delay, keep clicking at HoldClicksPerSecond while held.
+local holding,holdToken=false,0
+tapButton.MouseButton1Down:Connect(function()
+ holding=true holdToken+=1
+ local myHold=holdToken -- a quick re-press must not start a second loop
+ task.delay(0.35,function()
+  while holding and holdToken==myHold do ClickRemote:FireServer() task.wait(1/GameConfig.HoldClicksPerSecond) end
+ end)
+end)
+UserInputService.InputEnded:Connect(function(input)
+ if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then holding=false end
 end)
 local tip=Instance.new("TextLabel") tip.Name="Tip" tip.BackgroundTransparency=1
  tip.AnchorPoint=Vector2.new(0.5,1) tip.Position=UDim2.new(0.5,0,1,-86)
@@ -1131,6 +1168,13 @@ local function playSound(kind)
  sound:Play() Debris:AddItem(sound,8)
 end
 local lastSound=0
+require(script.ClickFeel).Start({
+ screenGui=screenGui,
+ resultRemote=Remotes:WaitForChild("ClickResult"),
+ formatNumber=formatNumber,
+ getLevels=function() return currentData.UpgradeLevels end,
+ isReducedMotion=function() return reducedMotion end,
+})
 ClickRemote.OnClientEvent:Connect(function() end)
 tapButton.Activated:Connect(function() playSound("Click") end)
 UserInputService.InputBegan:Connect(function(input,processed)
