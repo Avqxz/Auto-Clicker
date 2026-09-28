@@ -80,7 +80,7 @@ function AscensionUI.Build(deps)
 	})
 	text(ascendScroll, {
 		Size = UDim2.new(1, 0, 0, 44), TextSize = 17, LayoutOrder = 8, TextColor3 = Color3.fromRGB(77, 116, 130),
-		Text = "Resets: Coins, Upgrades, Auto-clickers\nKeeps: Pets, Gems, Skills",
+		Text = "Resets: Power, Coins, Upgrades, Auto-clickers\nKeeps: Pets, Gear, Skills, Gems, Tokens, Essence",
 	})
 	local ascendButton = Instance.new("TextButton")
 	ascendButton.Name = "AscendButton"
@@ -192,10 +192,10 @@ function AscensionUI.Build(deps)
 
 		-- Ascend panel
 		local requirement = GameConfig.GetRebirthRequirement(data.RebirthCount)
-		local ready = data.Coins >= requirement
-		progressLabel.Text = fmt(data.Coins) .. " / " .. fmt(requirement) .. " coins"
-		barFill.Size = UDim2.fromScale(math.clamp(data.Coins / requirement, 0, 1), 1)
-		rewardLabel.Text = "💎 +" .. fmt(GameConfig.GetAscensionGems(math.max(data.Coins, requirement), data.RebirthCount)) .. " Gems"
+		local ready = data.Power >= requirement
+		progressLabel.Text = "⚡ " .. fmt(data.Power) .. " / " .. fmt(requirement) .. " Power"
+		barFill.Size = UDim2.fromScale(math.clamp(data.Power / requirement, 0, 1), 1)
+		rewardLabel.Text = "💎 +" .. fmt(GameConfig.GetAscensionGems(math.max(data.Power, requirement), data.RebirthCount)) .. " Gems"
 			.. (if ready then "" else " (at requirement)")
 		bonusLabel.Text = "Permanent power: x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount)
 			.. "  →  x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount + 1)
@@ -205,7 +205,7 @@ function AscensionUI.Build(deps)
 				unlockLabel.Text = "Unlocks " .. zone.Name .. "!"
 			end
 		end
-		ascendButton.Text = if ready then "ASCEND" else "Need " .. fmt(requirement - data.Coins) .. " more coins"
+		ascendButton.Text = if ready then "ASCEND" else "Need " .. fmt(requirement - data.Power) .. " more Power"
 		canAscend = ready
 		ascendButton.AutoButtonColor = ready
 		ascendButton.BackgroundColor3 = if ready then Color3.fromRGB(185, 96, 247) else GREY

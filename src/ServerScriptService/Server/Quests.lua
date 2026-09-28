@@ -43,7 +43,7 @@ function Quests.Track(data, kind, amount)
 	end
 end
 
--- Pays a finished quest's Gems. Returns the quest definition, or nil if it can't be claimed.
+-- Pays a finished quest's Gems and Tokens. Returns the quest definition, or nil if it can't be claimed.
 function Quests.Claim(data, group, index)
 	Quests.Refresh(data)
 	local entry = data.Quests[group] and data.Quests[group][index]
@@ -53,10 +53,11 @@ function Quests.Claim(data, group, index)
 	end
 	entry.Claimed = true
 	data.Gems = (data.Gems or 0) + def.Gems
+	data.Tokens = (data.Tokens or 0) + (def.Tokens or 0)
 	return def
 end
 
--- Claims today's login reward. Returns { Day, Gems, Coins } (coins still to be paid by the caller)
+-- Claims today's login reward. Returns { Day, Gems, Tokens, Coins } (Coins still to be paid by the caller)
 -- or nil if already claimed today.
 function Quests.ClaimDaily(data)
 	local day, claimable = Config.GetDailyRewardState(data.Daily)
@@ -66,10 +67,11 @@ function Quests.ClaimDaily(data)
 	data.Daily.LastClaimDay = Config.GetDayIndex()
 	data.Daily.Streak = day
 	local reward = Config.DailyRewards[day]
-	local gems = reward.Gems or 0
+	local gems, tokens = reward.Gems or 0, reward.Tokens or 0
 	data.Gems = (data.Gems or 0) + gems
+	data.Tokens = (data.Tokens or 0) + tokens
 	local coins = if reward.CoinsPct then math.floor(Config.GetRebirthRequirement(data.RebirthCount) * reward.CoinsPct) else 0
-	return { Day = day, Gems = gems, Coins = coins }
+	return { Day = day, Gems = gems, Tokens = tokens, Coins = coins }
 end
 
 return Quests

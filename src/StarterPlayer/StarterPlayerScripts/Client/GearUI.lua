@@ -1,5 +1,5 @@
--- GEAR tab: the four equipped slots, the total bonus, and the gear bag with Equip / Discard.
--- Gear drops from bosses; the server owns all changes (EquipGear / UnequipGear / DiscardGear).
+-- GEAR tab: the four equipped slots, the total bonus, and the gear bag with Equip / Upgrade
+-- (Essence) / Salvage (for Essence). Gear drops from bosses; the server owns all changes.
 
 local GameConfig = require(game:GetService("ReplicatedStorage").Modules.GameConfig)
 
@@ -28,7 +28,8 @@ local function text(parent, props)
 	return l
 end
 
--- deps: { createPanel, createTabButton, bindTab, panels, styleButton, equipRemote, unequipRemote, discardRemote }
+-- deps: { createPanel, createTabButton, bindTab, panels, styleButton, formatNumber, equipRemote,
+--         unequipRemote, upgradeRemote, salvageRemote }
 function GearUI.Build(deps)
 	local frame, scroll = deps.createPanel("GearFrame", "Gear")
 	table.insert(deps.panels, frame)
@@ -94,7 +95,8 @@ function GearUI.Build(deps)
 	function api.Refresh(data)
 		local gear = data.Gear or { Items = {}, Equipped = {} }
 		local parts = {}
-		for _, owned in ipairs(gear.Items) do table.insert(parts, owned.Uid .. owned.Id) end
+		for _, owned in ipairs(gear.Items) do table.insert(parts, owned.Uid .. owned.Id .. "+" .. (owned.Level or 0)) end
+		table.insert(parts, "E" .. (data.Essence or 0))
 		for _, slot in ipairs(GameConfig.GearSlots) do table.insert(parts, slot .. tostring(gear.Equipped[slot])) end
 		local sig = table.concat(parts, ",")
 		if sig == signature then
@@ -112,10 +114,10 @@ function GearUI.Build(deps)
 			if item then
 				equippedUids[owned.Uid] = true
 				local color = GameConfig.RarityColors[GameConfig.GetGearRarity(item)]
-				card.Name.Text = item.Name
+				card.Name.Text = item.Name .. (if (owned.Level or 0) > 0 then " +" .. owned.Level else "")
 				card.Name.TextColor3 = rarityText(GameConfig.GetGearRarity(item))
 				card.Edge.Color = color
-				card.Stats.Text = GameConfig.DescribeGear(item)
+				card.Stats.Text = GameConfig.DescribeGear(item, owned.Level)
 				card.Unequip.Visible = true
 			else
 				card.Name.Text = "Empty"
@@ -134,7 +136,8 @@ function GearUI.Build(deps)
 		if total.AutoPower > 0 then table.insert(totalParts, "+" .. math.floor(total.AutoPower * 100 + 0.5) .. "% auto") end
 		for _, burst in ipairs(total.Bursts) do table.insert(totalParts, burst.Name) end
 		totalLabel.Text = if #totalParts > 0 then "Total: " .. table.concat(totalParts, " • ") else "No gear equipped"
-		bagHeader.Text = "Bag (" .. #gear.Items .. "/" .. GameConfig.MaxGearItems .. ")"
+		local essence = data.Essence or 0
+		bagHeader.Text = "Bag (" .. #gear.Items .. "/" .. GameConfig.MaxGearItems .. ")    ✨ " .. deps.formatNumber(essence) .. " Essence"
 
 		for _, row in ipairs(rows) do row:Destroy() end
 		rows = {}
@@ -142,45 +145,60 @@ function GearUI.Build(deps)
 			local item = GameConfig.GetGear(owned.Id)
 			if item then
 				local rarity = GameConfig.GetGearRarity(item)
+				local level = owned.Level or 0
 				local row = Instance.new("Frame")
 				row.Size = UDim2.new(1, 0, 0, 58)
 				row.BackgroundColor3 = Color3.fromRGB(225, 246, 249)
 				row.LayoutOrder = 10 + i
 				row.Parent = scroll
 				Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
-				text(row, { Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -200, 0, 24), TextScaled = true,
-					TextXAlignment = Enum.TextXAlignment.Left, Text = item.Name .. "  (" .. rarity .. " " .. item.Slot .. ")",
+				text(row, { Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -290, 0, 24), TextScaled = true,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Text = item.Name .. (if level > 0 then " +" .. level else "") .. "  (" .. rarity .. " " .. item.Slot .. ")",
 					TextColor3 = rarityText(rarity) })
-				text(row, { Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -200, 0, 22), TextSize = 13,
-					TextXAlignment = Enum.TextXAlignment.Left, Text = GameConfig.DescribeGear(item), TextColor3 = MUTED })
-				if equippedUids[owned.Uid] then
-					local tag = text(row, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
-						Size = UDim2.fromOffset(176, 30), TextScaled = true, Text = "EQUIPPED", TextColor3 = Color3.fromRGB(60, 170, 90) })
-					tag.TextXAlignment = Enum.TextXAlignment.Right
+				text(row, { Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -290, 0, 22), TextSize = 13,
+					TextXAlignment = Enum.TextXAlignment.Left, Text = GameConfig.DescribeGear(item, level)
+						.. (if equippedUids[owned.Uid] then "   • EQUIPPED" else ""), TextColor3 = MUTED })
+
+				-- Right side: [Equip] [Upgrade ✨cost] [Salvage]
+				local x = -8
+				local function place(b, width)
+					b.AnchorPoint = Vector2.new(1, 0.5)
+					b.Position = UDim2.new(1, x, 0.5, 0)
+					b.Size = UDim2.fromOffset(width, 36)
+					x -= width + 6
+				end
+				local armed = false -- Salvage needs a second tap to confirm
+				local salvage
+				salvage = button(row, "Salvage", Color3.fromRGB(246, 88, 111), function()
+					if armed then
+						deps.salvageRemote:FireServer(owned.Uid)
+					else
+						armed = true
+						salvage.Text = "+" .. GameConfig.GetGearSalvageValue(item, level) .. " ✨?"
+						task.delay(2, function()
+							armed = false
+							if salvage.Parent then salvage.Text = "Salvage" end
+						end)
+					end
+				end)
+				place(salvage, 80)
+				if level < GameConfig.GearMaxLevel then
+					local cost = GameConfig.GetGearUpgradeCost(item, level)
+					local upgrade = button(row, "+1  ✨" .. cost, if essence >= cost then Color3.fromRGB(150, 100, 240) else GREY, function()
+						deps.upgradeRemote:FireServer(owned.Uid)
+					end)
+					place(upgrade, 96)
 				else
+					local maxed = text(row, { Size = UDim2.fromOffset(96, 36), TextScaled = true, Text = "MAX +" .. level,
+						TextColor3 = Color3.fromRGB(150, 100, 240) })
+					place(maxed, 96)
+				end
+				if not equippedUids[owned.Uid] then
 					local equip = button(row, "Equip", Color3.fromRGB(88, 219, 132), function()
 						deps.equipRemote:FireServer(owned.Uid)
 					end)
-					equip.AnchorPoint = Vector2.new(1, 0.5)
-					equip.Position = UDim2.new(1, -96, 0.5, 0)
-					equip.Size = UDim2.fromOffset(84, 36)
-					local armed = false -- Discard needs a second tap to confirm
-					local discard
-					discard = button(row, "Discard", Color3.fromRGB(246, 88, 111), function()
-						if armed then
-							deps.discardRemote:FireServer(owned.Uid)
-						else
-							armed = true
-							discard.Text = "Sure?"
-							task.delay(2, function()
-								armed = false
-								if discard.Parent then discard.Text = "Discard" end
-							end)
-						end
-					end)
-					discard.AnchorPoint = Vector2.new(1, 0.5)
-					discard.Position = UDim2.new(1, -8, 0.5, 0)
-					discard.Size = UDim2.fromOffset(84, 36)
+					place(equip, 76)
 				end
 				table.insert(rows, row)
 			end

@@ -13,7 +13,7 @@ end
 function Boards.Start(PlayerData)
  local folder=Instance.new('Folder') folder.Name='GlobalLeaderboards' folder.Parent=workspace.Map
  local rows={}
- for index,title in ipairs({'GLOBAL ASCENSIONS','GLOBAL LIFETIME COINS'}) do
+ for index,title in ipairs({'GLOBAL ASCENSIONS','GLOBAL LIFETIME POWER'}) do
   local board=Instance.new('Part') board.Name=title board.Size=Vector3.new(27,19,1)
   board.Position=Vector3.new(index==1 and -32 or 32,12,76) board.Anchored=true
   board.Material=Enum.Material.Slate board.Color=Color3.fromRGB(25,39,59) board.Parent=folder
@@ -36,7 +36,7 @@ function Boards.Start(PlayerData)
    for _,player in ipairs(Players:GetPlayers()) do
     local d=PlayerData.Get(player)
     if d and PlayerData.IsPersistent(player) then
-     for index,value in ipairs({d.RebirthCount, math.floor(math.log10(1+d.TotalCoinsEarned)*1e6)}) do
+     for index,value in ipairs({d.RebirthCount, math.floor(math.log10(1+d.TotalPowerEarned)*1e6)}) do
       pcall(function() stores[index]:UpdateAsync(tostring(player.UserId),function(old) return math.max(old or 0,value) end) end)
      end
     end

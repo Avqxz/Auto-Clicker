@@ -1,7 +1,7 @@
 -- Shared configuration for the clicking simulator.
 -- Used by both the server (authoritative logic) and the client (UI display).
 -- Modeled after pet-collection clicker sims (e.g. Rebirth Champions Ultimate):
--- click for coins, hatch eggs for pets that multiply your earnings, fuse
+-- click for Power, hatch eggs (bought with Coins) for pets that multiply your earnings, fuse
 -- duplicate pets into stronger Golden versions, and rebirth for a permanent
 -- multiplier plus more pet-equip slots.
 
@@ -14,7 +14,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower1",
 		Name = "Better Clicks",
-		Description = "+1 coin per click",
+		Description = "+1 Power per click",
 		BaseCost = 10,
 		CostMultiplier = 1.15,
 		ClickPowerAdd = 1,
@@ -22,7 +22,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower2",
 		Name = "Power Gloves",
-		Description = "+5 coins per click",
+		Description = "+5 Power per click",
 		BaseCost = 100,
 		CostMultiplier = 1.17,
 		ClickPowerAdd = 5,
@@ -30,7 +30,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower3",
 		Name = "Mega Clicker",
-		Description = "+25 coins per click",
+		Description = "+25 Power per click",
 		BaseCost = 1000,
 		CostMultiplier = 1.2,
 		ClickPowerAdd = 25,
@@ -38,7 +38,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower4",
 		Name = "Ultra Fist",
-		Description = "+150 coins per click",
+		Description = "+150 Power per click",
 		BaseCost = 15000,
 		CostMultiplier = 1.22,
 		ClickPowerAdd = 150,
@@ -46,7 +46,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower5",
 		Name = "Titan Strike",
-		Description = "+800 coins per click",
+		Description = "+800 Power per click",
 		BaseCost = 200000,
 		CostMultiplier = 1.24,
 		ClickPowerAdd = 800,
@@ -54,7 +54,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower6",
 		Name = "Colossus Punch",
-		Description = "+5,000 coins per click",
+		Description = "+5,000 Power per click",
 		BaseCost = 3000000,
 		CostMultiplier = 1.26,
 		ClickPowerAdd = 5000,
@@ -62,7 +62,7 @@ GameConfig.Upgrades = {
 	{
 		Id = "ClickPower7",
 		Name = "Godly Tap",
-		Description = "+35,000 coins per click",
+		Description = "+35,000 Power per click",
 		BaseCost = 50000000,
 		CostMultiplier = 1.28,
 		ClickPowerAdd = 35000,
@@ -173,34 +173,34 @@ GameConfig.AutoClickers = {
 	{
 		Id = "Auto1",
 		Name = "Clicking Bot",
-		Description = "+2 coins/second",
+		Description = "+2 Power/second",
 		BaseCost = 25,
 		CostMultiplier = 1.15,
-		CoinsPerSecond = 2,
+		PowerPerSecond = 2,
 	},
 	{
 		Id = "Auto2",
 		Name = "Clicking Drone",
-		Description = "+5 coins/second",
+		Description = "+5 Power/second",
 		BaseCost = 500,
 		CostMultiplier = 1.17,
-		CoinsPerSecond = 5,
+		PowerPerSecond = 5,
 	},
 	{
 		Id = "Auto3",
 		Name = "Clicking Factory",
-		Description = "+25 coins/second",
+		Description = "+25 Power/second",
 		BaseCost = 5000,
 		CostMultiplier = 1.2,
-		CoinsPerSecond = 25,
+		PowerPerSecond = 25,
 	},
 	{
 		Id = "Auto4",
 		Name = "Clicking Megaplex",
-		Description = "+150 coins/second",
+		Description = "+150 Power/second",
 		BaseCost = 75000,
 		CostMultiplier = 1.22,
-		CoinsPerSecond = 150,
+		PowerPerSecond = 150,
 	},
 }
 
@@ -237,7 +237,7 @@ GameConfig.Skills = {
 	{ Id = "OfflineEarnings", Branch = "Automation", Name = "Offline Earnings", MaxLevel = 5, BaseCost = 12, CostGrowth = 1.7, Requires = "AutoPower",
 		Effect = function(l) return (l * 10) .. "% of auto income while offline (8h max)" end },
 	{ Id = "HeadStart", Branch = "Automation", Name = "Head Start", MaxLevel = 5, BaseCost = 8, CostGrowth = 1.7, Requires = "AutoPower",
-		Effect = function(l) return "Start each Ascension with " .. (500 * l * l) .. " coins" end },
+		Effect = function(l) return "Start each Ascension with " .. (500 * l * l) .. " Power" end },
 	{ Id = "EggLuck", Branch = "Luck", Name = "Egg Luck", MaxLevel = 10, BaseCost = 5, CostGrowth = 1.5,
 		Effect = function(l) return "+" .. (l * 10) .. "% odds for non-Common pets" end },
 	{ Id = "PetSlots", Branch = "Luck", Name = "Pet Slots", MaxLevel = 2, BaseCost = 25, CostGrowth = 2.5, Requires = "EggLuck",
@@ -266,8 +266,8 @@ function GameConfig.GetSkillCost(node, level)
 end
 
 -- Gems for ascending now: more if you overshoot the requirement, and more each Ascension.
-function GameConfig.GetAscensionGems(coins, rebirthCount)
-	local ratio = math.max(1, coins / GameConfig.GetRebirthRequirement(rebirthCount))
+function GameConfig.GetAscensionGems(power, rebirthCount)
+	local ratio = math.max(1, power / GameConfig.GetRebirthRequirement(rebirthCount))
 	return math.floor(GameConfig.Rebirth.BaseGems * math.sqrt(ratio) * (1 + 0.5 * rebirthCount))
 end
 
@@ -294,6 +294,7 @@ GameConfig.OfflineBaseRate = 0.05 -- share of auto income earned while offline, 
 
 -- Day 7 is the top of the streak; claiming after it starts over at day 1. Missing a day resets.
 -- Coins rewards are a share of the player's current Ascension requirement, so they stay useful.
+-- Day 7 also pays Tokens.
 GameConfig.DailyRewards = {
 	{ Gems = 5 },
 	{ CoinsPct = 0.25 },
@@ -301,7 +302,7 @@ GameConfig.DailyRewards = {
 	{ CoinsPct = 0.5 },
 	{ Gems = 15 },
 	{ CoinsPct = 1 },
-	{ Gems = 40 },
+	{ Gems = 40, Tokens = 10 },
 }
 
 GameConfig.QuestsPerPeriod = 3
@@ -309,19 +310,19 @@ GameConfig.QuestPool = {
 	-- Kind is what the server tracks: Click, Hatch, HatchLegendary (Legendary or better), BossWin,
 	-- Ascend, Upgrade (levels bought), Combo (highest combo reached, not a running total).
 	Daily = {
-		{ Id = "d_click", Kind = "Click", Target = 3000, Text = "Click 3,000 times", Gems = 6 },
-		{ Id = "d_hatch", Kind = "Hatch", Target = 10, Text = "Hatch 10 eggs", Gems = 6 },
-		{ Id = "d_boss", Kind = "BossWin", Target = 2, Text = "Defeat 2 bosses", Gems = 8 },
-		{ Id = "d_combo", Kind = "Combo", Target = 100, Text = "Reach a 100x combo", Gems = 5 },
-		{ Id = "d_upgrade", Kind = "Upgrade", Target = 25, Text = "Buy 25 upgrade levels", Gems = 5 },
-		{ Id = "d_ascend", Kind = "Ascend", Target = 1, Text = "Ascend once", Gems = 8 },
+		{ Id = "d_click", Kind = "Click", Target = 3000, Text = "Click 3,000 times", Gems = 6, Tokens = 1 },
+		{ Id = "d_hatch", Kind = "Hatch", Target = 10, Text = "Hatch 10 eggs", Gems = 6, Tokens = 1 },
+		{ Id = "d_boss", Kind = "BossWin", Target = 2, Text = "Defeat 2 bosses", Gems = 8, Tokens = 1 },
+		{ Id = "d_combo", Kind = "Combo", Target = 100, Text = "Reach a 100x combo", Gems = 5, Tokens = 1 },
+		{ Id = "d_upgrade", Kind = "Upgrade", Target = 25, Text = "Buy 25 upgrade levels", Gems = 5, Tokens = 1 },
+		{ Id = "d_ascend", Kind = "Ascend", Target = 1, Text = "Ascend once", Gems = 8, Tokens = 1 },
 	},
 	Weekly = {
-		{ Id = "w_click", Kind = "Click", Target = 25000, Text = "Click 25,000 times", Gems = 35 },
-		{ Id = "w_ascend", Kind = "Ascend", Target = 5, Text = "Ascend 5 times", Gems = 50 },
-		{ Id = "w_boss", Kind = "BossWin", Target = 15, Text = "Defeat 15 bosses", Gems = 45 },
-		{ Id = "w_legendary", Kind = "HatchLegendary", Target = 3, Text = "Hatch 3 Legendary+ pets", Gems = 50 },
-		{ Id = "w_hatch", Kind = "Hatch", Target = 100, Text = "Hatch 100 eggs", Gems = 35 },
+		{ Id = "w_click", Kind = "Click", Target = 25000, Text = "Click 25,000 times", Gems = 35, Tokens = 5 },
+		{ Id = "w_ascend", Kind = "Ascend", Target = 5, Text = "Ascend 5 times", Gems = 50, Tokens = 5 },
+		{ Id = "w_boss", Kind = "BossWin", Target = 15, Text = "Defeat 15 bosses", Gems = 45, Tokens = 5 },
+		{ Id = "w_legendary", Kind = "HatchLegendary", Target = 3, Text = "Hatch 3 Legendary+ pets", Gems = 50, Tokens = 5 },
+		{ Id = "w_hatch", Kind = "Hatch", Target = 100, Text = "Hatch 100 eggs", Gems = 35, Tokens = 5 },
 	},
 }
 
@@ -366,10 +367,56 @@ function GameConfig.GetDailyRewardState(daily, now)
 	return nextDay, true
 end
 
+-- ===== Currencies: Power, Coins, Gems, Tokens, Essence =====
+-- Power: from clicking/auto-clickers; buys upgrades and auto-clickers; needed to Ascend (resets).
+-- Coins: from bosses, quests, daily rewards and selling Power; buys eggs (resets on Ascension).
+-- Gems: from Ascending, bosses and quests; buys skills (kept).
+-- Tokens: from quests and the day-7 streak; buys timed boosts in the Token Shop (kept).
+-- Essence: from bosses and salvaging gear; upgrades gear (kept).
+
+-- Coins per Power when selling; improves with each Ascension.
+function GameConfig.GetSellRate(rebirthCount)
+	return 1 + 0.1 * rebirthCount
+end
+
+GameConfig.TokenShop = {
+	{ Id = "PowerBoost", Boost = "Power", Name = "2x Power", Description = "Double Power from clicks and auto-clickers", Minutes = 15, Cost = 10 },
+	{ Id = "LuckBoost", Boost = "Luck", Name = "2x Luck", Description = "Double odds for non-Common pets", Minutes = 15, Cost = 10 },
+}
+GameConfig.BoostMaxMinutes = 60 -- buying again extends a running boost, up to this much time left
+
+-- 2 while the boost is running (data.Boosts[kind] = os.time it ends), else 1.
+function GameConfig.GetBoostMultiplier(data, kind, now)
+	local ends = data and data.Boosts and data.Boosts[kind]
+	return if ends and ends > (now or os.time()) then 2 else 1
+end
+
+-- Gear upgrading with Essence: each level adds 20% to every stat (bursts unchanged).
+GameConfig.GearMaxLevel = 5
+GameConfig.GearUpgradeCost = { Common = 5, Rare = 10, Epic = 20, Legendary = 40, Mythic = 80 } -- x (level + 1)
+GameConfig.GearSalvageValue = { Common = 3, Rare = 6, Epic = 12, Legendary = 25, Mythic = 50 }
+
+function GameConfig.GetGearLevelScale(level)
+	return 1 + 0.2 * (level or 0)
+end
+
+function GameConfig.GetGearUpgradeCost(item, level)
+	return GameConfig.GearUpgradeCost[GameConfig.GetGearRarity(item)] * ((level or 0) + 1)
+end
+
+-- Essence back from salvaging: the base value plus half of what was spent upgrading it.
+function GameConfig.GetGearSalvageValue(item, level)
+	local spent = 0
+	for l = 0, (level or 0) - 1 do
+		spent += GameConfig.GetGearUpgradeCost(item, l)
+	end
+	return GameConfig.GearSalvageValue[GameConfig.GetGearRarity(item)] + math.floor(spent / 2)
+end
+
 -- ===== Bosses & equipment =====
 -- Each zone has a boss at its far end. Fights are personal and timed: while a player is fighting,
--- their clicks deal damage (same power/combo/crit math) instead of earning coins. Winning pays
--- coins + Gems and drops one of the boss's four gear pieces.
+-- their clicks deal damage (same power/combo/crit math) instead of earning Power. Winning pays
+-- Coins, Gems and Essence and drops one of the boss's four gear pieces.
 
 GameConfig.BossFightSeconds = 60
 GameConfig.BossWinCooldown = 90
@@ -378,11 +425,11 @@ GameConfig.BossRange = 70 -- studs; clicks only hit the boss while this close
 GameConfig.MaxGearItems = 40
 
 GameConfig.Bosses = {
-	{ Zone = "Forest", Id = "Mossback", Name = "MOSSBACK", Health = 3000, RewardCoins = 1200, RewardGems = 2, Rarity = "Common" },
-	{ Zone = "Ice", Id = "FrostGolem", Name = "FROST GOLEM", Health = 40000, RewardCoins = 15000, RewardGems = 4, Rarity = "Rare" },
-	{ Zone = "Lava", Id = "MagmaKing", Name = "MAGMA KING", Health = 600000, RewardCoins = 200000, RewardGems = 8, Rarity = "Epic" },
-	{ Zone = "Candy", Id = "GummyTyrant", Name = "GUMMY TYRANT", Health = 10000000, RewardCoins = 3000000, RewardGems = 15, Rarity = "Legendary" },
-	{ Zone = "Space", Id = "VoidTitan", Name = "VOID TITAN", Health = 250000000, RewardCoins = 60000000, RewardGems = 30, Rarity = "Mythic" },
+	{ Zone = "Forest", Id = "Mossback", Name = "MOSSBACK", Health = 3000, RewardCoins = 1200, RewardGems = 2, RewardEssence = 1, Rarity = "Common" },
+	{ Zone = "Ice", Id = "FrostGolem", Name = "FROST GOLEM", Health = 40000, RewardCoins = 15000, RewardGems = 4, RewardEssence = 3, Rarity = "Rare" },
+	{ Zone = "Lava", Id = "MagmaKing", Name = "MAGMA KING", Health = 600000, RewardCoins = 200000, RewardGems = 8, RewardEssence = 6, Rarity = "Epic" },
+	{ Zone = "Candy", Id = "GummyTyrant", Name = "GUMMY TYRANT", Health = 10000000, RewardCoins = 3000000, RewardGems = 15, RewardEssence = 12, Rarity = "Legendary" },
+	{ Zone = "Space", Id = "VoidTitan", Name = "VOID TITAN", Health = 250000000, RewardCoins = 60000000, RewardGems = 30, RewardEssence = 25, Rarity = "Mythic" },
 }
 
 GameConfig.GearSlots = { "Gloves", "Aura", "Core", "Artifact" }
@@ -454,11 +501,12 @@ function GameConfig.GetGearStats(data)
 			if owned.Uid == uid then
 				local item = GameConfig.GetGear(owned.Id)
 				if item then
+					local scale = GameConfig.GetGearLevelScale(owned.Level)
 					for stat, value in pairs(item.Stats) do
 						if stat == "Burst" then
 							table.insert(total.Bursts, value)
 						else
-							total[stat] += value
+							total[stat] += value * scale
 						end
 					end
 				end
@@ -468,14 +516,15 @@ function GameConfig.GetGearStats(data)
 	return total
 end
 
--- One-line stat summary for UI, e.g. "+35% click • +1% crit".
-function GameConfig.DescribeGear(item)
+-- One-line stat summary for UI at a given upgrade level, e.g. "+35% click • +1% crit".
+function GameConfig.DescribeGear(item, level)
 	local parts = {}
 	local st = item.Stats
-	if st.ClickPower then table.insert(parts, "+" .. math.floor(st.ClickPower * 100 + 0.5) .. "% click") end
-	if st.CritChance then table.insert(parts, "+" .. math.floor(st.CritChance * 100 + 0.5) .. "% crit") end
-	if st.CritDamage then table.insert(parts, "+" .. string.format("%.1f", st.CritDamage) .. "x crit dmg") end
-	if st.AutoPower then table.insert(parts, "+" .. math.floor(st.AutoPower * 100 + 0.5) .. "% auto") end
+	local k = GameConfig.GetGearLevelScale(level)
+	if st.ClickPower then table.insert(parts, "+" .. math.floor(st.ClickPower * k * 100 + 0.5) .. "% click") end
+	if st.CritChance then table.insert(parts, "+" .. string.format("%g", math.floor(st.CritChance * k * 1000 + 0.5) / 10) .. "% crit") end
+	if st.CritDamage then table.insert(parts, "+" .. string.format("%.2f", st.CritDamage * k) .. "x crit dmg") end
+	if st.AutoPower then table.insert(parts, "+" .. math.floor(st.AutoPower * k * 100 + 0.5) .. "% auto") end
 	if st.Burst then table.insert(parts, st.Burst.Name .. ": every " .. st.Burst.Every .. " clicks x" .. st.Burst.Multiplier) end
 	return table.concat(parts, " • ")
 end
@@ -583,12 +632,12 @@ function GameConfig.GetBulkCost(item, currentLevel, count)
 	return total
 end
 
--- How many levels (capped at `cap`) can be bought with `coins`, and what they cost.
-function GameConfig.GetMaxAffordable(item, currentLevel, coins, cap)
+-- How many levels (capped at `cap`) can be bought with `budget`, and what they cost.
+function GameConfig.GetMaxAffordable(item, currentLevel, budget, cap)
 	local count, total = 0, 0
 	while count < cap do
 		local nextCost = GameConfig.GetCost(item, currentLevel + count)
-		if total + nextCost > coins then
+		if total + nextCost > budget then
 			break
 		end
 		total += nextCost
@@ -610,9 +659,10 @@ function GameConfig.GetMaxEquippedPets(rebirthCount, skills)
 		+ GameConfig.GetSkillLevel(skills, "PetSlots")
 end
 
--- Weighted random pet roll from an egg's pet pool. Egg Luck scales up every non-Common weight.
-function GameConfig.RollPet(egg, skills)
-	local luck = 1 + 0.1 * GameConfig.GetSkillLevel(skills, "EggLuck")
+-- Weighted random pet roll from an egg's pet pool. Egg Luck (and the 2x Luck boost) scale up every
+-- non-Common weight.
+function GameConfig.RollPet(egg, skills, luckMultiplier)
+	local luck = (1 + 0.1 * GameConfig.GetSkillLevel(skills, "EggLuck")) * (luckMultiplier or 1)
 	local function weight(pet)
 		return if pet.Rarity == "Common" then pet.Weight else pet.Weight * luck
 	end
@@ -633,24 +683,26 @@ function GameConfig.RollPet(egg, skills)
 	return egg.Pets[#egg.Pets]
 end
 
--- Coins per click before combo/crit: base x pets x Ascension x Click Mastery x gear.
+-- Power per click before combo/crit: base x pets x Ascension x Click Mastery x gear x 2x Power boost.
 function GameConfig.GetClickPower(data, equippedPets)
 	return data.ClickPower * GameConfig.GetPetMultiplierTotal(equippedPets)
 		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
 		* (1 + 0.1 * GameConfig.GetSkillLevel(data.Skills, "ClickMastery"))
 		* (1 + GameConfig.GetGearStats(data).ClickPower)
+		* GameConfig.GetBoostMultiplier(data, "Power")
 end
 
--- Coins per second from auto-clickers: base x pets x Ascension x Auto Power.
+-- Power per second from auto-clickers: base x pets x Ascension x Auto Power x gear x 2x Power boost.
 function GameConfig.GetAutoIncome(data, equippedPets)
 	local perSecond = 0
 	for _, auto in ipairs(GameConfig.AutoClickers) do
-		perSecond += (data.AutoClickerLevels[auto.Id] or 0) * auto.CoinsPerSecond
+		perSecond += (data.AutoClickerLevels[auto.Id] or 0) * auto.PowerPerSecond
 	end
 	return perSecond * GameConfig.GetPetMultiplierTotal(equippedPets)
 		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
 		* (1 + 0.2 * GameConfig.GetSkillLevel(data.Skills, "AutoPower"))
 		* (1 + GameConfig.GetGearStats(data).AutoPower)
+		* GameConfig.GetBoostMultiplier(data, "Power")
 end
 
 -- Multiplicative stack of every equipped pet's multiplier.

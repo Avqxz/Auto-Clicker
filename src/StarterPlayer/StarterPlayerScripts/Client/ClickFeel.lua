@@ -115,7 +115,7 @@ function ClickFeel.Start(deps)
 		label.Text = if mode == "boss"
 			then prefix .. "-" .. deps.formatNumber(amount) .. " 💥"
 			else prefix .. "+" .. deps.formatNumber(amount) .. " ⚡"
-		label.ZIndex = 5
+		label.ZIndex = 2 -- above the HUD (1), below open panels (3)
 		label.Position = UDim2.fromOffset(-500, -500) -- off-screen until the first frame positions it
 		label.Visible = false
 		label.Parent = screenGui

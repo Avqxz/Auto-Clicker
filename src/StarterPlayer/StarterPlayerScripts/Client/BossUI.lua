@@ -100,7 +100,8 @@ function BossUI.Start(deps)
 			setVisible(false)
 			local drop = info.Gear and GameConfig.GetGear(info.Gear)
 			local rarity = drop and GameConfig.GetGearRarity(drop) or "Epic"
-			deps.showToast("DEFEATED " .. name .. "!  +" .. fmt(info.Coins) .. " coins  +" .. info.Gems .. " 💎"
+			deps.showToast("DEFEATED " .. name .. "!  +" .. fmt(info.Coins) .. " Coins  +" .. info.Gems .. " 💎"
+				.. (if (info.Essence or 0) > 0 then "  +" .. info.Essence .. " Essence" else "")
 				.. (if drop then "  •  " .. drop.Name .. " (" .. rarity .. ")" else "  •  gear bag full"))
 			deps.celebrate(rarity)
 		elseif kind == "lose" and fight then

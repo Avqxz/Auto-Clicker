@@ -48,7 +48,10 @@ local ClickResultRemote = createRemoteEvent("ClickResult")
 local BossStateRemote = createRemoteEvent("BossState")
 local EquipGearRemote = createRemoteEvent("EquipGear")
 local UnequipGearRemote = createRemoteEvent("UnequipGear")
-local DiscardGearRemote = createRemoteEvent("DiscardGear")
+local SalvageGearRemote = createRemoteEvent("SalvageGear")
+local UpgradeGearRemote = createRemoteEvent("UpgradeGear")
+local SellPowerRemote = createRemoteEvent("SellPower")
+local BuyBoostRemote = createRemoteEvent("BuyBoost")
 local ClaimQuestRemote = createRemoteEvent("ClaimQuest")
 local ClaimDailyRemote = createRemoteEvent("ClaimDaily")
 local OfflineEarningsRemote = createRemoteEvent("OfflineEarnings")
@@ -70,9 +73,13 @@ local function allow(player,key,seconds)
  local now=os.clock() if now-(limits[id][key] or -math.huge)<seconds then return false end
  limits[id][key]=now return true
 end
-local function earn(data,amount)
+-- Power: the click currency (clicks, auto-clickers, offline). Coins: the egg currency.
+local function earnPower(data,amount)
+ data.Power=math.min(GameConfig.MaxCurrency,data.Power+amount)
+ data.TotalPowerEarned=math.min(GameConfig.MaxCurrency,data.TotalPowerEarned+amount)
+end
+local function earnCoins(data,amount)
  data.Coins=math.min(GameConfig.MaxCurrency,data.Coins+amount)
- data.TotalCoinsEarned=math.min(GameConfig.MaxCurrency,data.TotalCoinsEarned+amount)
 end
 
 -- ===== Helpers =====
@@ -90,7 +97,7 @@ local function updateLeaderstats(player)
 	if not data or not leaderstats then
 		return
 	end
-	leaderstats.Coins.Value = math.floor(data.Coins)
+	leaderstats.Power.Value = math.floor(data.Power)
 	leaderstats.Ascensions.Value = data.RebirthCount
 end
 
@@ -98,10 +105,10 @@ local function setupLeaderstats(player, data)
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
 
-	local coins = Instance.new("NumberValue")
-	coins.Name = "Coins"
-	coins.Value = math.floor(data.Coins)
-	coins.Parent = leaderstats
+	local power = Instance.new("NumberValue")
+	power.Name = "Power"
+	power.Value = math.floor(data.Power)
+	power.Parent = leaderstats
 
 	local ascensions = Instance.new("IntValue")
 	ascensions.Name = "Ascensions" -- stored as RebirthCount in the save
@@ -159,7 +166,7 @@ Players.PlayerAdded:Connect(function(player)
 		local seconds = math.clamp(os.time() - data.LastOnline, 0, GameConfig.OfflineCapSeconds)
 		local offline = math.floor(GameConfig.GetAutoIncome(data, getEquippedPets(data)) * seconds * offlineRate)
 		if offline > 0 then
-			earn(data, offline)
+			earnPower(data, offline)
 			updateLeaderstats(player)
 			task.delay(3, function() -- after the client UI is up
 				OfflineEarningsRemote:FireClient(player, offline, seconds, offlineRate)
@@ -195,9 +202,11 @@ local function winBossFight(player, data, fight)
 	local boss = fight.Boss
 	endBossFight(player, fight, true)
 	local coins = boss.RewardCoins * GameConfig.GetRebirthMultiplier(data.RebirthCount)
-	earn(data, coins)
+	earnCoins(data, coins)
 	local gems = boss.RewardGems
 	data.Gems = (data.Gems or 0) + gems
+	local essence = boss.RewardEssence or 0
+	data.Essence = (data.Essence or 0) + essence
 
 	-- Drop one of the boss's gear pieces (Gems instead if the gear bag is full).
 	local drops = {}
@@ -213,7 +222,7 @@ local function winBossFight(player, data, fight)
 		dropId = item.Id
 		local uid = gear.NextUid
 		gear.NextUid += 1
-		table.insert(gear.Items, { Uid = uid, Id = item.Id })
+		table.insert(gear.Items, { Uid = uid, Id = item.Id, Level = 0 })
 		if not gear.Equipped[item.Slot] then
 			gear.Equipped[item.Slot] = uid -- fill an empty slot automatically
 		end
@@ -223,7 +232,7 @@ local function winBossFight(player, data, fight)
 	end
 
 	Quests.Track(data, "BossWin", 1)
-	BossStateRemote:FireClient(player, "win", { Coins = coins, Gems = gems, Gear = dropId })
+	BossStateRemote:FireClient(player, "win", { Coins = coins, Gems = gems, Essence = essence, Gear = dropId })
 	updateLeaderstats(player)
 	pushData(player)
 end
@@ -299,19 +308,79 @@ UnequipGearRemote.OnServerEvent:Connect(function(player, slot)
 	end
 end)
 
-DiscardGearRemote.OnServerEvent:Connect(function(player, uid)
+-- Salvaging destroys a piece for Essence (base value + half of what was spent upgrading it).
+SalvageGearRemote.OnServerEvent:Connect(function(player, uid)
 	if type(uid) ~= "number" or not allow(player, "gear", 0.1) then return end
 	local data = PlayerData.Get(player)
 	local owned, index = data and findGear(data, uid)
-	if owned then
+	local item = owned and GameConfig.GetGear(owned.Id)
+	if item then
 		for slot, equippedUid in pairs(data.Gear.Equipped) do
 			if equippedUid == uid then
 				data.Gear.Equipped[slot] = nil
 			end
 		end
 		table.remove(data.Gear.Items, index)
+		local essence = GameConfig.GetGearSalvageValue(item, owned.Level)
+		data.Essence = (data.Essence or 0) + essence
+		FeedbackRemote:FireClient(player, "Purchase", "Salvaged " .. item.Name .. " for +" .. essence .. " Essence")
 		pushData(player)
 	end
+end)
+
+UpgradeGearRemote.OnServerEvent:Connect(function(player, uid)
+	if type(uid) ~= "number" or not allow(player, "gear", 0.15) then return end
+	local data = PlayerData.Get(player)
+	local owned = data and findGear(data, uid)
+	local item = owned and GameConfig.GetGear(owned.Id)
+	if not item or (owned.Level or 0) >= GameConfig.GearMaxLevel then
+		return
+	end
+	local cost = GameConfig.GetGearUpgradeCost(item, owned.Level)
+	if (data.Essence or 0) < cost then
+		return
+	end
+	data.Essence -= cost
+	owned.Level = (owned.Level or 0) + 1
+	FeedbackRemote:FireClient(player, "Purchase", item.Name .. " upgraded to +" .. owned.Level)
+	pushData(player)
+end)
+
+-- ===== Selling Power & Token Shop =====
+
+SellPowerRemote.OnServerEvent:Connect(function(player)
+	if not allow(player, "sell", 0.5) then return end
+	local data = PlayerData.Get(player)
+	if not data or data.Power < 1 then
+		return
+	end
+	local sold = math.floor(data.Power)
+	local coins = math.floor(sold * GameConfig.GetSellRate(data.RebirthCount))
+	data.Power -= sold
+	earnCoins(data, coins)
+	FeedbackRemote:FireClient(player, "Purchase", "Sold " .. sold .. " Power for " .. coins .. " Coins")
+	updateLeaderstats(player)
+	pushData(player)
+end)
+
+-- Buying a boost starts it, or extends a running one (up to BoostMaxMinutes left).
+BuyBoostRemote.OnServerEvent:Connect(function(player, itemId)
+	if type(itemId) ~= "string" or not allow(player, "boost", 0.3) then return end
+	local data = PlayerData.Get(player)
+	local item = data and findById(GameConfig.TokenShop, itemId)
+	if not item or (data.Tokens or 0) < item.Cost then
+		return
+	end
+	local now = os.time()
+	local current = math.max(now, data.Boosts[item.Boost] or 0)
+	if current + item.Minutes * 60 > now + GameConfig.BoostMaxMinutes * 60 then
+		FeedbackRemote:FireClient(player, "Info", item.Name .. " is already stacked to the max")
+		return
+	end
+	data.Tokens -= item.Cost
+	data.Boosts[item.Boost] = current + item.Minutes * 60
+	FeedbackRemote:FireClient(player, "Purchase", item.Name .. " active for " .. math.ceil((data.Boosts[item.Boost] - now) / 60) .. " min")
+	pushData(player)
 end)
 
 -- ===== Quests & daily reward =====
@@ -321,7 +390,8 @@ ClaimQuestRemote.OnServerEvent:Connect(function(player, group, index)
 	local data = PlayerData.Get(player)
 	local def = data and Quests.Claim(data, group, index)
 	if def then
-		FeedbackRemote:FireClient(player, "Purchase", "Quest complete: " .. def.Text .. "  +" .. def.Gems .. " 💎")
+		FeedbackRemote:FireClient(player, "Purchase", "Quest complete: " .. def.Text .. "  +" .. def.Gems .. " 💎"
+			.. (if def.Tokens then "  +" .. def.Tokens .. " Tokens" else ""))
 		pushData(player)
 	end
 end)
@@ -332,10 +402,13 @@ ClaimDailyRemote.OnServerEvent:Connect(function(player)
 	local reward = data and Quests.ClaimDaily(data)
 	if reward then
 		if reward.Coins > 0 then
-			earn(data, reward.Coins)
+			earnCoins(data, reward.Coins)
 		end
-		FeedbackRemote:FireClient(player, "Ascend", "Day " .. reward.Day .. " reward: "
-			.. (if reward.Gems > 0 then "+" .. reward.Gems .. " 💎" else "+" .. reward.Coins .. " coins"))
+		local parts = {}
+		if reward.Gems > 0 then table.insert(parts, "+" .. reward.Gems .. " 💎") end
+		if reward.Tokens > 0 then table.insert(parts, "+" .. reward.Tokens .. " Tokens") end
+		if reward.Coins > 0 then table.insert(parts, "+" .. reward.Coins .. " Coins") end
+		FeedbackRemote:FireClient(player, "Ascend", "Day " .. reward.Day .. " reward: " .. table.concat(parts, "  "))
 		updateLeaderstats(player)
 		pushData(player)
 	end
@@ -386,7 +459,7 @@ local function handleClick(player)
 		end
 	end
 
-	-- In a boss fight (and close enough), the click hits the boss instead of earning coins.
+	-- In a boss fight (and close enough), the click hits the boss instead of earning Power.
 	local fight = bossFights[player.UserId]
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	local bossPos = fight and mapRefs.Bosses[fight.Boss.Id] and mapRefs.Bosses[fight.Boss.Id].Position
@@ -400,7 +473,7 @@ local function handleClick(player)
 		return
 	end
 
-	earn(data,earned)
+	earnPower(data,earned)
 	ClickResultRemote:FireClient(player, earned, crit, combo.Count, nil, burstName)
 	updateLeaderstats(player)
 	pushData(player)
@@ -424,12 +497,12 @@ local function buyLevels(player, list, levelsKey, id, amount, onLevel)
 	local currentLevel = levels[id] or 0
 	local cap = math.max(0, (item.MaxLevel or GameConfig.MaxUpgradeLevel) - currentLevel)
 	local wanted = if amount == "max" then cap else math.min(amount, cap)
-	local count, cost = GameConfig.GetMaxAffordable(item, currentLevel, data.Coins, wanted)
+	local count, cost = GameConfig.GetMaxAffordable(item, currentLevel, data.Power, wanted)
 	if count == 0 or (amount ~= "max" and count < wanted) then
 		return -- x1/x10 buy all-or-nothing; MAX buys whatever fits
 	end
 
-	data.Coins -= cost
+	data.Power -= cost
 	levels[id] = currentLevel + count
 	Quests.Track(data, "Upgrade", count)
 	if onLevel then onLevel(data, item, count) end
@@ -490,7 +563,7 @@ local function handleHatchEgg(player, eggId)
  data.EggsHatched=(data.EggsHatched or 0)+1
 	Quests.Track(data, "Hatch", 1)
 
-	local rolled = GameConfig.RollPet(egg, data.Skills)
+	local rolled = GameConfig.RollPet(egg, data.Skills, GameConfig.GetBoostMultiplier(data, "Luck"))
 	local uid = data.NextPetUid
 	data.NextPetUid += 1
 
@@ -677,15 +750,17 @@ local function handleAscend(player)
 	end
 
 	local requirement = GameConfig.GetRebirthRequirement(data.RebirthCount)
-	if data.Coins < requirement then
+	if data.Power < requirement then
 		return
 	end
 
-	-- Resets coins, click power, upgrades and auto-clickers. Pets, Gems and skills are permanent.
-	local gems = GameConfig.GetAscensionGems(data.Coins, data.RebirthCount)
+	-- Resets Power, Coins, click power, upgrades and auto-clickers. Pets, Gems, Tokens, Essence,
+	-- gear and skills are permanent.
+	local gems = GameConfig.GetAscensionGems(data.Power, data.RebirthCount)
 	data.Gems = (data.Gems or 0) + gems
 	local headStart = GameConfig.GetSkillLevel(data.Skills, "HeadStart")
-	data.Coins = 500 * headStart * headStart
+	data.Power = 500 * headStart * headStart
+	data.Coins = 0
 	data.ClickPower = GameConfig.StartingClickPower
 	data.UpgradeLevels = {}
 	data.AutoClickerLevels = {}
@@ -786,7 +861,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if data then
 			local earned = GameConfig.GetAutoIncome(data, getEquippedPets(data))
 			if earned > 0 then
-				earn(data,earned)
+				earnPower(data,earned)
 				updateLeaderstats(player)
 				pushData(player)
 			end
@@ -827,7 +902,7 @@ RedeemCodeRemote.OnServerEvent:Connect(function(player,raw)
  data.RedeemedCodes=data.RedeemedCodes or {}
  if data.RedeemedCodes[code] then FeedbackRemote:FireClient(player,"Info","You already redeemed this code.") return end
  -- No yielding between the duplicate check, marking the code and granting its reward.
- data.RedeemedCodes[code]=true earn(data,reward.Coins)
+ data.RedeemedCodes[code]=true earnCoins(data,reward.Coins)
  updateLeaderstats(player) pushData(player)
  FeedbackRemote:FireClient(player,"Purchase","Code redeemed! +"..reward.Coins.." Coins")
  task.spawn(function() PlayerData.Save(player) end)

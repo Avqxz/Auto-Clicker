@@ -1,7 +1,7 @@
 # Clicking Simulator
 
 A Roblox pet-collection clicking simulator, in the style of games like
-*Rebirth Champions Ultimate*: click a button to earn coins, hatch eggs for
+*Rebirth Champions Ultimate*: click to earn Power, hatch eggs for
 pets that multiply your earnings, fuse duplicate pets into stronger Golden
 versions, buy upgrades and auto-clickers, and rebirth for a permanent
 multiplier plus more pet-equip slots. Progress is saved per-player with
@@ -9,20 +9,21 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 
 ## Features
 
-- **Click to earn** — click the big button to earn coins based on your total click power.
-- **Pets & eggs** — spend coins to hatch eggs; each egg has a weighted pool of pets with different rarities (Common → Mythic) and multipliers. Equip pets to multiply your click power and passive income.
+- **Five currencies** — ⚡ **Power** (from clicking and auto-clickers; buys upgrades, needed to Ascend), 💰 **Coins** (from bosses, quests, daily rewards and **selling Power** with the SELL button; buys eggs), 💎 **Gems** (Ascension, bosses, quests; buys skills), 🎫 **Tokens** (quests, day-7 streak; buys 15-minute 2x Power / 2x Luck boosts in the Token Shop) and ✨ **Essence** (bosses, salvaging gear; upgrades gear to +5). Saves from before the split are converted once on join: old Coins become Power.
+- **Click to earn** — click anywhere (or the CLICK button) to earn Power based on your total click power.
+- **Pets & eggs** — spend Coins to hatch eggs; each egg has a weighted pool of pets with different rarities (Common → Mythic) and multipliers. Equip pets to multiply your click power and passive income.
 - **Pet fusion** — collect 5 duplicates of the same (non-Golden) pet and fuse them into a Golden version worth 2x the multiplier.
 - **Combo & crits** — consecutive clicks inside the combo window build a combo (x1.25 at 25, x1.5 at 50, x2 at 100, **OVERDRIVE** x3 at 200, with a glowing screen edge and sparks); every click can crit. Results are computed on the server and shown as floating "+N ⚡" numbers beside the character. Holding the CLICK button auto-clicks at 5/sec.
-- **Upgrades** — spend coins to increase coins per click, plus Critical Chance / Critical Damage / Combo Duration boosts; buy x1, x10 or MAX at a time.
-- **Auto-clickers** — spend coins on passive generators that earn coins every second, even between clicks (also boosted by equipped pets).
-- **Ascension** — reset coins, upgrades, auto-clickers and click power for a permanent power multiplier, an extra pet-equip slot, and **Gems** (more if you overshoot the requirement). Pets, Gems and skills are kept. Each Ascension also opens the next zone gate. The Ascend panel previews the Gems, the multiplier change and what unlocks. (Stored as `RebirthCount` in saves.)
+- **Upgrades** — spend Power to increase Power per click, plus Critical Chance / Critical Damage / Combo Duration boosts; buy x1, x10 or MAX at a time.
+- **Auto-clickers** — spend Power on passive generators that earn Power every second, even between clicks (also boosted by equipped pets).
+- **Ascension** — reset Power, Coins, upgrades, auto-clickers and click power for a permanent power multiplier, an extra pet-equip slot, and **Gems** (more if you overshoot the requirement). Pets, gear, skills, Gems, Tokens and Essence are kept. Each Ascension also opens the next zone gate. The Ascend panel previews the Gems, the multiplier change and what unlocks. (Stored as `RebirthCount` in saves.)
 - **Skill tree** — permanent nodes bought with Gems in three branches: Power (Click Mastery, Crit Mastery, Mega Crits, Combo Boost), Automation (Auto Power, Offline Earnings, Head Start) and Luck (Egg Luck, Pet Slots, Golden Touch). Later nodes need their branch's first node.
 - **Bosses** — each zone has a boss at its far end (Mossback, Frost Golem, Magma King, Gummy Tyrant, Void Titan). A Fight prompt starts a personal 60-second fight: your clicks damage the boss (same power/combo/crit math) instead of earning coins. Wins pay coins, Gems and a guaranteed gear drop; short cooldowns after wins and losses.
 - **Equipment** — Gloves / Aura / Core / Artifact slots (GEAR tab). Each boss drops one of four themed pieces, Common (Forest) up to Mythic (Space), adding click power, crit chance/damage or auto income; Ember Idol and Quantum Gloves add a burst (every 100th click x5 / x10). Up to 40 pieces in the bag; Discard needs a second tap.
-- **Daily rewards** — a 7-day login streak (Gems and coins, 40 Gems on day 7); missing a day restarts it. The calendar opens by itself when a reward is ready.
+- **Daily rewards** — a 7-day login streak (Gems and Coins; 40 Gems + 10 Tokens on day 7); missing a day restarts it. The calendar opens by itself when a reward is ready.
 - **Quests** — 3 daily and 3 weekly quests (clicks, hatches, bosses, combos, Ascensions, upgrades, Legendary hatches) paying Gems; the same set for everyone each UTC day/week. QUESTS/DAILY buttons show a red dot when something can be claimed.
 - **Offline earnings** — auto-clickers keep earning 5% of their rate while you're away (8h max, more with the Offline Earnings skill), shown in a Welcome Back panel.
-- **Leaderboard** — Coins and Rebirths show up in Roblox's built-in leaderboard (`leaderstats`).
+- **Leaderboard** — Power and Ascensions show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
 - **Five linked biome zones** — Forest (spawn, clickable orb, Rebirth shrine, Basic Egg), Ice World, Lava World, Candy World and Space World, laid out in a line and connected by walkways. Each walkway ends in a gate that needs 1 / 2 / 3 / 5 rebirths; gates are opened per player on the client, so each player only passes the ones they've unlocked. Every zone has its own egg, which must be hatched in person. The map is flattened to a smooth cartoon SmoothPlastic look. Forest/Ice/Lava come from JTea's free simulator pack and Candy/Space from free Creator Store maps — see [ASSETS.md](ASSETS.md). The in-world orb/eggs/altar are also directly clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
@@ -57,6 +58,7 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/BossUI.lua       # Boss fight HUD (HP bar, timer) and results
   StarterPlayer/StarterPlayerScripts/Client/GearUI.lua       # GEAR tab: equipped slots and gear bag
   StarterPlayer/StarterPlayerScripts/Client/RetentionUI.lua  # Quests, Daily rewards and Welcome Back panels
+  StarterPlayer/StarterPlayerScripts/Client/EconomyUI.lua    # Coins counter, SELL button, boost timers and Token Shop
 ```
 
 ## Running it in Roblox Studio
@@ -68,7 +70,7 @@ src/
    ```
 3. In Roblox Studio, open the Rojo plugin and click **Connect**. The first
    time, also import the map assets into ServerStorage (see [ASSETS.md](ASSETS.md)).
-4. Press Play to test. Click the button to earn coins, open **Eggs** to hatch
+4. Press Play to test. Click to earn Power, SELL it for Coins, open **Eggs** to hatch
    pets, **Pets** to equip/fuse them, **Shop** to buy upgrades/auto-clickers,
    and Rebirth once you've saved enough.
 

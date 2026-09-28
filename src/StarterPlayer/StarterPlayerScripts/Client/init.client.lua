@@ -30,7 +30,11 @@ local ZoneLockedRemote = Remotes:WaitForChild("ZoneLocked")
 local PickStarterPetRemote = Remotes:WaitForChild("PickStarterPet")
 
 local currentData = {
-	Coins = 0,
+	Power = 0, -- click currency (upgrades, Ascension)
+	Coins = 0, -- egg currency (bosses, quests, selling Power)
+	Tokens = 0,
+	Essence = 0,
+	Boosts = {},
 	ClickPower = GameConfig.StartingClickPower,
 	UpgradeLevels = {},
 	AutoClickerLevels = {},
@@ -173,7 +177,7 @@ coinLabel.TextStrokeTransparency = 0
 coinLabel.TextStrokeColor3 = Color3.fromRGB(35,70,105)
 coinLabel.TextScaled = true
 coinLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-coinLabel.Text = "0 Coins"
+coinLabel.Text = "⚡ 0"
 coinLabel.Parent = coinFrame
 
 -- Click power label (clicking is now a full-screen tap, not a dedicated button)
@@ -346,7 +350,9 @@ local gearUI = require(script.GearUI).Build({
 	styleButton = styleButton,
 	equipRemote = Remotes:WaitForChild("EquipGear"),
 	unequipRemote = Remotes:WaitForChild("UnequipGear"),
-	discardRemote = Remotes:WaitForChild("DiscardGear"),
+	formatNumber = formatNumber,
+	upgradeRemote = Remotes:WaitForChild("UpgradeGear"),
+	salvageRemote = Remotes:WaitForChild("SalvageGear"),
 })
 
 -- ===== Shop (upgrades + auto-clickers) =====
@@ -486,7 +492,7 @@ function refreshShop()
 		local cap = math.max(0, (entry.Item.MaxLevel or GameConfig.MaxUpgradeLevel) - level)
 		local count, cost
 		if buyAmount == "max" then
-			count, cost = GameConfig.GetMaxAffordable(entry.Item, level, currentData.Coins, cap)
+			count, cost = GameConfig.GetMaxAffordable(entry.Item, level, currentData.Power, cap)
 			if count == 0 then
 				count, cost = math.min(1, cap), GameConfig.GetCost(entry.Item, level) -- show the next level's price
 			end
@@ -503,8 +509,8 @@ function refreshShop()
 			entry.BuyButton.Text = "MAX"
 			entry.BuyButton.BackgroundColor3 = Color3.fromRGB(152, 174, 184)
 		else
-			entry.BuyButton.Text = (if count > 1 then "x" .. count .. " " else "") .. formatNumber(cost)
-			entry.BuyButton.BackgroundColor3 = if currentData.Coins >= cost
+			entry.BuyButton.Text = (if count > 1 then "x" .. count .. " " else "") .. formatNumber(cost) .. " ⚡"
+			entry.BuyButton.BackgroundColor3 = if currentData.Power >= cost
 				then Color3.fromRGB(88, 219, 132)
 				else Color3.fromRGB(152, 174, 184)
 		end
@@ -593,7 +599,7 @@ local function refreshEggs()
 			entry.HatchButton.Text = "Locked"
 			entry.HatchButton.BackgroundColor3 = Color3.fromRGB(140, 159, 171)
 		else
-			entry.HatchButton.Text = formatNumber(egg.Cost)
+			entry.HatchButton.Text = "💰 " .. formatNumber(egg.Cost)
 			entry.HatchButton.BackgroundColor3 = if currentData.Coins >= egg.Cost
 				then Color3.fromRGB(0, 202, 237)
 				else Color3.fromRGB(152, 174, 184)
@@ -1033,12 +1039,12 @@ end)
 local function refreshUI()
 	local totalClickPower = getClickPower(currentData)
 
-	coinLabel.Text = formatNumber(currentData.Coins) .. " Coins"
-	powerLabel.Text = "+" .. formatNumber(totalClickPower) .. " per click"
+	coinLabel.Text = "⚡ " .. formatNumber(currentData.Power)
+	powerLabel.Text = "+" .. formatNumber(totalClickPower) .. " ⚡ per click"
 
 	local requirement = GameConfig.GetRebirthRequirement(currentData.RebirthCount)
-	rebirthButton.Text = ("Ascend (%d)\n%s coins"):format(currentData.RebirthCount, formatNumber(requirement))
-	rebirthButton.BackgroundColor3 = if currentData.Coins >= requirement
+	rebirthButton.Text = ("Ascend (%d)\n%s ⚡"):format(currentData.RebirthCount, formatNumber(requirement))
+	rebirthButton.BackgroundColor3 = if currentData.Power >= requirement
 		then Color3.fromRGB(185, 96, 247)
 		else Color3.fromRGB(127, 91, 189)
 
@@ -1246,10 +1252,10 @@ objective.BackgroundColor3=Color3.fromRGB(25,53,74) objective.BackgroundTranspar
 objective.Font=Enum.Font.FredokaOne objective.TextSize=17 objective.TextWrapped=true objective.TextColor3=Color3.new(1,1,1)
 objective.Parent=screenGui Instance.new("UICorner",objective).CornerRadius=UDim.new(0,10)
 local function nextGoal(data)
- if not next(data.UpgradeLevels) then objective.Text="FIRST GOAL • Buy Better Clicks for 10 coins"
- elseif #data.Pets==0 then objective.Text="NEXT • Hatch a Basic Egg for "..GameConfig.Eggs[1].Cost.." coins"
- elseif not next(data.AutoClickerLevels) then objective.Text="NEXT • Buy a Clicking Bot for 25 coins"
- else objective.Text="ASCEND • "..formatNumber(data.Coins).." / "..formatNumber(GameConfig.GetRebirthRequirement(data.RebirthCount)).." coins" end
+ if not next(data.UpgradeLevels) then objective.Text="FIRST GOAL • Buy Better Clicks for 10 Power"
+ elseif #data.Pets==0 then objective.Text="NEXT • SELL Power for Coins, then hatch a Basic Egg ("..GameConfig.Eggs[1].Cost.." Coins)"
+ elseif not next(data.AutoClickerLevels) then objective.Text="NEXT • Buy a Clicking Bot for 25 Power"
+ else objective.Text="ASCEND • "..formatNumber(data.Power).." / "..formatNumber(GameConfig.GetRebirthRequirement(data.RebirthCount)).." Power" end
 end
 nextGoal(currentData)
 DataUpdatedRemote.OnClientEvent:Connect(nextGoal)
@@ -1333,5 +1339,20 @@ require(script.RetentionUI).Build({
  claimQuestRemote=Remotes:WaitForChild("ClaimQuest"),
  claimDailyRemote=Remotes:WaitForChild("ClaimDaily"),
  offlineRemote=Remotes:WaitForChild("OfflineEarnings"),
+})
+-- Coins counter + SELL button, running boosts, and the Token Shop.
+require(script.EconomyUI).Build({
+ screenGui=screenGui,
+ controls=controls,
+ utility=utility,
+ createPanel=createPanel,
+ bindTab=bindTab,
+ registerPanel=function(frame) table.insert(panels,frame) panelScales[frame]=Instance.new("UIScale",frame) end,
+ styleButton=styleButton,
+ formatNumber=formatNumber,
+ dataRemote=DataUpdatedRemote,
+ requestData=function() task.delay(1.1,function() Remotes.RequestData:FireServer() end) end, -- RequestData is rate-limited to 1/s
+ sellRemote=Remotes:WaitForChild("SellPower"),
+ buyBoostRemote=Remotes:WaitForChild("BuyBoost"),
 })
 resizeHUD() -- size the panels created above

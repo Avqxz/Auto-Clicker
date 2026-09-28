@@ -7,11 +7,24 @@ local PlayerData = {Cache={}, Sessions={}, Saving={}}
 local Store = DSS:GetDataStore('ClickingSimulator_PlayerData_v1')
 local OWNER = game.JobId ~= '' and game.JobId or HttpService:GenerateGUID(false)
 local LEASE = 180
-local DEFAULT = {Coins=0,ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalCoinsEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={},Gear={Items={},Equipped={},NextUid=1},Quests={Day=-1,Daily={},Week=-1,Weekly={}},Daily={LastClaimDay=-1,Streak=0}}
+local DEFAULT = {SaveVersion=2,Power=0,Coins=0,Tokens=0,Essence=0,Boosts={},ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalPowerEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={},Gear={Items={},Equipped={},NextUid=1},Quests={Day=-1,Daily={},Week=-1,Weekly={}},Daily={LastClaimDay=-1,Streak=0}}
 local function copy(t)
  local out={} for k,v in pairs(t) do out[k]=type(v)=='table' and copy(v) or v end return out
 end
+-- Version 1 saves had a single click currency called Coins. It became Power (same balance and
+-- lifetime total); Coins is now the egg currency and starts at 0. Runs once per save.
+local function migrate(data)
+ if (data.SaveVersion or 1)<2 then
+  data.Power=data.Coins or 0
+  data.TotalPowerEarned=data.TotalCoinsEarned or 0
+  data.Coins=0
+  data.TotalCoinsEarned=nil
+  data.SaveVersion=2
+ end
+ return data
+end
 local function defaults(data)
+ migrate(data)
  for k,v in pairs(DEFAULT) do if data[k]==nil then data[k]=type(v)=='table' and copy(v) or v end end
  return data
 end

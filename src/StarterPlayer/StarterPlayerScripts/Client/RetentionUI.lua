@@ -170,9 +170,9 @@ function RetentionUI.Build(deps)
 	nice.Size = UDim2.new(1, 0, 0, 56)
 	nice.LayoutOrder = 4
 
-	deps.offlineRemote.OnClientEvent:Connect(function(coins, seconds, rate)
+	deps.offlineRemote.OnClientEvent:Connect(function(power, seconds, rate)
 		awayLabel.Text = "You were away for " .. duration(seconds)
-		earnedLabel.Text = "+" .. fmt(coins) .. " coins"
+		earnedLabel.Text = "+" .. fmt(power) .. " ⚡ Power"
 		rateLabel.Text = "Your auto-clickers kept working at " .. math.floor(rate * 100 + 0.5) .. "% while you were gone"
 			.. (if seconds >= GameConfig.OfflineCapSeconds then " (8h max)." else ".")
 			.. "\nUpgrade Offline Earnings in the Skill Tree to earn more."
@@ -197,7 +197,7 @@ function RetentionUI.Build(deps)
 				row.Title.Parent.Visible = def ~= nil
 				if def then
 					local done = entry.Progress >= def.Target
-					row.Title.Text = def.Text .. "   💎 " .. def.Gems
+					row.Title.Text = def.Text .. "   💎 " .. def.Gems .. (if def.Tokens then "  +" .. def.Tokens .. " token" .. (if def.Tokens == 1 then "" else "s") else "")
 					row.Fill.Size = UDim2.fromScale(math.clamp(entry.Progress / def.Target, 0, 1), 1)
 					row.Progress.Text = fmt(entry.Progress) .. " / " .. fmt(def.Target)
 					if entry.Claimed then
@@ -217,7 +217,8 @@ function RetentionUI.Build(deps)
 		local requirement = GameConfig.GetRebirthRequirement(data.RebirthCount)
 		for d, card in ipairs(dayCards) do
 			local reward = GameConfig.DailyRewards[d]
-			card.Reward.Text = if reward.Gems then "💎 " .. reward.Gems else fmt(math.floor(requirement * reward.CoinsPct)) .. "\ncoins"
+			card.Reward.Text = if reward.Gems then "💎 " .. reward.Gems .. (if reward.Tokens then "\n+" .. reward.Tokens .. " tokens" else "")
+				else fmt(math.floor(requirement * reward.CoinsPct)) .. "\nCoins"
 			local claimed = if claimable then d < nextDay else d <= nextDay
 			local isNext = claimable and d == nextDay
 			card.Status.Text = if claimed then "✓" elseif isNext then "TODAY" else ""
