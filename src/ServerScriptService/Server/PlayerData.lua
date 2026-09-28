@@ -7,7 +7,7 @@ local PlayerData = {Cache={}, Sessions={}, Saving={}}
 local Store = DSS:GetDataStore('ClickingSimulator_PlayerData_v1')
 local OWNER = game.JobId ~= '' and game.JobId or HttpService:GenerateGUID(false)
 local LEASE = 180
-local DEFAULT = {SaveVersion=2,Power=0,Coins=0,Tokens=0,Essence=0,Boosts={},ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalPowerEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={},Gear={Items={},Equipped={},NextUid=1},Quests={Day=-1,Daily={},Week=-1,Weekly={}},Daily={LastClaimDay=-1,Streak=0}}
+local DEFAULT = {SaveVersion=2,Power=0,Coins=0,Tokens=0,Essence=0,Boosts={},ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalPowerEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={},Gear={Items={},Equipped={},NextUid=1},Quests={Day=-1,Daily={},Week=-1,Weekly={}},Daily={LastClaimDay=-1,Streak=0},Passes={},Receipts={}}
 local function copy(t)
  local out={} for k,v in pairs(t) do out[k]=type(v)=='table' and copy(v) or v end return out
 end

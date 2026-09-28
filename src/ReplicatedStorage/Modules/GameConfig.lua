@@ -416,6 +416,37 @@ function GameConfig.GetGearSalvageValue(item, level)
 	return GameConfig.GearSalvageValue[GameConfig.GetGearRarity(item)] + math.floor(spent / 2)
 end
 
+-- ===== Monetization =====
+-- Paste the IDs from the Creator Dashboard (Monetization > Passes / Developer Products). An Id of 0
+-- means "not set up": the item is hidden from players (Studio shows it as "ID not set").
+-- Everything here is convenience or speed; nothing is required to progress.
+
+GameConfig.GamePasses = {
+	{ Key = "AutoClick", Id = 0, Name = "Auto Click", Description = "Adds an AUTO toggle that clicks for you" },
+	{ Key = "TripleHatch", Id = 0, Name = "Triple Hatch", Description = "Hatch 3 eggs at once" },
+	{ Key = "PetSlots", Id = 0, Name = "+3 Pet Equip", Description = "Equip 3 more pets" },
+	{ Key = "Lucky", Id = 0, Name = "Lucky", Description = "x1.5 odds for non-Common pets, forever" },
+	{ Key = "FastHatch", Id = 0, Name = "Fast Hatch", Description = "Hatch twice as fast" },
+	{ Key = "VIP", Id = 0, Name = "VIP", Description = "+10% Power, +10% Coins, VIP chat tag, +5 Gems per daily reward, VIP aura" },
+}
+
+GameConfig.DevProducts = {
+	{ Key = "PowerBoost15", Id = 0, Name = "2x Power (15 min)", Boost = "Power", Minutes = 15 },
+	{ Key = "LuckBoost15", Id = 0, Name = "2x Luck (15 min)", Boost = "Luck", Minutes = 15 },
+	{ Key = "BossRetry", Id = 0, Name = "Instant Boss Retry", Description = "Clears every boss cooldown" },
+	{ Key = "TokenPack", Id = 0, Name = "Token Pack", Description = "+25 Tokens", Tokens = 25 },
+}
+
+GameConfig.AutoClickPerSecond = 5
+GameConfig.PaidBoostMaxMinutes = 180 -- paid boosts can stack further than Token Shop ones
+GameConfig.VIPBonus = 0.1 -- +10% Power and Coins
+GameConfig.VIPDailyGems = 5
+
+-- data.Passes is refreshed from Roblox on every join ({ [Key] = true }).
+function GameConfig.HasPass(data, key)
+	return data ~= nil and data.Passes ~= nil and data.Passes[key] == true
+end
+
 -- ===== Bosses & equipment =====
 -- Each zone has a boss at its far end. Fights are personal and timed: while a player is fighting,
 -- their clicks deal damage (same power/combo/crit math) instead of earning Power. Winning pays
@@ -743,9 +774,10 @@ function GameConfig.GetRebirthMultiplier(rebirthCount)
 	return 1 + (rebirthCount * GameConfig.Rebirth.MultiplierPerRebirth)
 end
 
-function GameConfig.GetMaxEquippedPets(rebirthCount, skills)
+function GameConfig.GetMaxEquippedPets(rebirthCount, skills, passes)
 	return math.min(GameConfig.MaxEquippedPets, GameConfig.BaseMaxEquippedPets + rebirthCount)
 		+ GameConfig.GetSkillLevel(skills, "PetSlots")
+		+ (if passes and passes.PetSlots then 3 else 0)
 end
 
 -- Weighted random pet roll from an egg's pet pool. Egg Luck (and the 2x Luck boost) scale up every
@@ -779,6 +811,7 @@ function GameConfig.GetClickPower(data, equippedPets)
 		* (1 + 0.1 * GameConfig.GetSkillLevel(data.Skills, "ClickMastery"))
 		* (1 + GameConfig.GetGearStats(data).ClickPower)
 		* GameConfig.GetBoostMultiplier(data, "Power")
+		* (if GameConfig.HasPass(data, "VIP") then 1 + GameConfig.VIPBonus else 1)
 end
 
 -- Power per second from auto-clickers: base x pets x Ascension x Auto Power x gear x pet abilities
@@ -794,6 +827,7 @@ function GameConfig.GetAutoIncome(data, equippedPets)
 		* (1 + GameConfig.GetGearStats(data).AutoPower)
 		* (1 + GameConfig.GetPetAbilityStats(equippedPets).AutoPower)
 		* GameConfig.GetBoostMultiplier(data, "Power")
+		* (if GameConfig.HasPass(data, "VIP") then 1 + GameConfig.VIPBonus else 1)
 end
 
 -- Multiplicative stack of every equipped pet's multiplier.

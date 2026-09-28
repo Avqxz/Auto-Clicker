@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerData = require(script.PlayerData)
 local Quests = require(script.Quests)
+local Monetization = require(script.Monetization)
 local MapBuilder = require(script.MapBuilder)
 local PetFollowers = require(script.PetFollowers)
 
@@ -151,6 +152,13 @@ end
 
 -- ===== Player lifecycle =====
 
+local monetization = Monetization.Start({
+	PlayerData = PlayerData,
+	pushData = pushData,
+	feedback = function(player, kind, text) FeedbackRemote:FireClient(player, kind, text) end,
+	bossCooldowns = bossCooldowns,
+})
+
 Players.PlayerAdded:Connect(function(player)
 	local data = PlayerData.Load(player)
  if not data then return end
@@ -158,6 +166,7 @@ Players.PlayerAdded:Connect(function(player)
 	setupLeaderstats(player, data)
 
 	Quests.Refresh(data)
+	monetization.RefreshPasses(player, data)
 
 	-- Offline earnings: a base share of auto income for the time since the last save (capped),
 	-- raised by the Offline Earnings skill.
@@ -203,6 +212,7 @@ local function winBossFight(player, data, fight)
 	endBossFight(player, fight, true)
 	local coins = boss.RewardCoins * GameConfig.GetRebirthMultiplier(data.RebirthCount)
 		* (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).CoinBonus)
+		* (if GameConfig.HasPass(data, "VIP") then 1 + GameConfig.VIPBonus else 1)
 	earnCoins(data, coins)
 	local gems = boss.RewardGems
 	data.Gems = (data.Gems or 0) + gems
@@ -357,7 +367,8 @@ SellPowerRemote.OnServerEvent:Connect(function(player)
 	end
 	local sold = math.floor(data.Power)
 	local coins = math.floor(sold * GameConfig.GetSellRate(data.RebirthCount)
-		* (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).CoinBonus))
+		* (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).CoinBonus)
+		* (if GameConfig.HasPass(data, "VIP") then 1 + GameConfig.VIPBonus else 1))
 	data.Power -= sold
 	earnCoins(data, coins)
 	FeedbackRemote:FireClient(player, "Purchase", "Sold " .. sold .. " Power for " .. coins .. " Coins")
@@ -405,6 +416,10 @@ ClaimDailyRemote.OnServerEvent:Connect(function(player)
 	if reward then
 		if reward.Coins > 0 then
 			earnCoins(data, reward.Coins)
+		end
+		if GameConfig.HasPass(data, "VIP") then -- VIP daily chest
+			data.Gems += GameConfig.VIPDailyGems
+			reward.Gems += GameConfig.VIPDailyGems
 		end
 		local parts = {}
 		if reward.Gems > 0 then table.insert(parts, "+" .. reward.Gems .. " 💎") end
@@ -548,8 +563,10 @@ end)
 
 -- ===== Pets & eggs =====
 
-local function handleHatchEgg(player, eggId)
- if type(eggId)~="string" or not allow(player,"hatch",GameConfig.HatchCooldown) then return end
+-- skipCooldown: the 2nd/3rd egg of a Triple Hatch.
+local function handleHatchEgg(player, eggId, skipCooldown)
+	local cooldown = GameConfig.HatchCooldown * (if player:GetAttribute("Pass_FastHatch") then 0.5 else 1)
+	if type(eggId)~="string" or (not skipCooldown and not allow(player,"hatch",cooldown)) then return end
 	local data = PlayerData.Get(player)
 	local egg = findById(GameConfig.Eggs, eggId)
 	if not data or not egg then
@@ -582,7 +599,8 @@ local function handleHatchEgg(player, eggId)
 	Quests.Track(data, "Hatch", 1)
 
 	local rolled = GameConfig.RollPet(egg, data.Skills,
-		GameConfig.GetBoostMultiplier(data, "Luck") * (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).EggLuck))
+		GameConfig.GetBoostMultiplier(data, "Luck") * (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).EggLuck)
+			* (if GameConfig.HasPass(data, "Lucky") then 1.5 else 1))
 	local uid = data.NextPetUid
 	data.NextPetUid += 1
 
@@ -599,7 +617,7 @@ local function handleHatchEgg(player, eggId)
 	end
 
 	local equipChanged = false
-	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
+	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills, data.Passes) then
 		table.insert(data.EquippedPetUids, uid)
 		equipChanged = true
 	end
@@ -615,7 +633,20 @@ local function handleHatchEgg(player, eggId)
 	end
 end
 
-HatchEggRemote.OnServerEvent:Connect(handleHatchEgg)
+HatchEggRemote.OnServerEvent:Connect(function(player, eggId, count)
+	-- Triple Hatch pass: three eggs per press (each still checks cost, storage and range).
+	if count == 3 and player:GetAttribute("Pass_TripleHatch") then
+		local data = PlayerData.Get(player)
+		local before = data and #data.Pets
+		handleHatchEgg(player, eggId)
+		if data and #data.Pets > before then
+			handleHatchEgg(player, eggId, true)
+			handleHatchEgg(player, eggId, true)
+		end
+		return
+	end
+	handleHatchEgg(player, eggId)
+end)
 
 PickStarterPetRemote.OnServerEvent:Connect(function(player, petName)
 	local data = PlayerData.Get(player)
@@ -658,7 +689,7 @@ EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 		return
 	end
 
-	if #data.EquippedPetUids >= GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
+	if #data.EquippedPetUids >= GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills, data.Passes) then
 		return
 	end
 
@@ -750,7 +781,7 @@ FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
 	}
 	table.insert(data.Pets, goldenPet)
 
-	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
+	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills, data.Passes) then
 		table.insert(data.EquippedPetUids, uid)
 	end
 

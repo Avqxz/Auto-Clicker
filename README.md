@@ -31,11 +31,26 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Five linked biome zones** — Forest (spawn, clickable orb, Rebirth shrine, Basic Egg), Ice World, Lava World, Candy World and Space World, laid out in a line and connected by walkways. Each walkway ends in a gate that needs 1 / 2 / 3 / 5 rebirths; gates are opened per player on the client, so each player only passes the ones they've unlocked. Every zone has its own egg, which must be hatched in person. The map is flattened to a smooth cartoon SmoothPlastic look. Forest/Ice/Lava come from JTea's free simulator pack and Candy/Space from free Creator Store maps — see [ASSETS.md](ASSETS.md). The in-world orb/eggs/altar are also directly clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
 - **3D pet models** — a simple procedural "critter" model (`PetModelFactory.lua`) represents every pet: it's used for the pets that visibly orbit your character when equipped (seen by every player, not just you), for the icons in the Pets inventory list, and for the spinning model in the hatch-reveal popup. Golden pets get a neon look and sparkle particles.
 
+- **Store (gamepasses & developer products)** — Auto Click (AUTO toggle), Triple Hatch (x3 button), +3 Pet Equip, Lucky (x1.5 egg luck), Fast Hatch (half cooldown) and VIP (+10% Power and Coins, [VIP] chat tag, +5 Gems per daily reward, sparkle aura); plus 2x Power / 2x Luck (15 min), Instant Boss Retry and a 25-Token pack. All convenience; nothing is required to progress. **IDs start at 0 (hidden from players)** — see "Setting up monetization" below.
+
 Not implemented (possible extensions): hand-authored mesh/asset pets (pets
-are simple primitive-part builds), an Aura/dice gacha system, more than one
-world, and gamepass monetization — the last would need real Roblox
-MarketplaceService product IDs configured in Studio, which can't be set up
-from code alone.
+are simple primitive-part builds), an Aura/dice gacha system, trading, a
+battle pass, limited-time events and an hourly global boss.
+
+## Setting up monetization
+
+1. In the [Creator Dashboard](https://create.roblox.com/dashboard/creations), open this experience →
+   **Monetization → Passes** and create one pass per entry in `GameConfig.GamePasses`
+   (Auto Click, Triple Hatch, +3 Pet Equip, Lucky, Fast Hatch, VIP). Give each a price and put it
+   **On Sale**.
+2. Under **Monetization → Developer Products**, create one product per entry in
+   `GameConfig.DevProducts` (2x Power, 2x Luck, Instant Boss Retry, Token Pack) with a price.
+3. Copy each numeric ID into the matching `Id = 0` in
+   `src/ReplicatedStorage/Modules/GameConfig.lua` and publish. Items with an ID show in the STORE
+   with their Robux price; items left at 0 stay hidden (Studio shows them as "ID not set").
+
+Developer product purchases are recorded per player (`Receipts` in the save) and saved before
+Roblox is told they were granted, so a retry never grants twice.
 
 ## Project layout
 
@@ -53,6 +68,7 @@ src/
   ServerScriptService/Server/AssetScenery.lua           # Scatters optional prop assets (trees, rocks, bushes) along the zone edges
   ServerScriptService/Server/PetFollowers.lua           # Spawns/animates the equipped pets that orbit each player
   ServerScriptService/Server/Quests.lua                 # Daily/weekly quest progress and the daily login reward
+  ServerScriptService/Server/Monetization.lua           # Gamepass ownership, VIP aura, developer product receipts
   StarterPlayer/StarterPlayerScripts/Client/init.client.lua  # Builds the HUD/Shop/Eggs/Pets UI and talks to the server
   StarterPlayer/StarterPlayerScripts/Client/ZoneGates.lua    # Opens the zone gates the local player has unlocked
   StarterPlayer/StarterPlayerScripts/Client/ClickFeel.lua    # Floating click numbers, combo meter and OVERDRIVE effects
@@ -63,6 +79,7 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/EconomyUI.lua    # Coins counter, SELL button, boost timers and Token Shop
   StarterPlayer/StarterPlayerScripts/Client/UIPolish.lua     # Menu blur, panel pop-in and camera shake
   StarterPlayer/StarterPlayerScripts/Client/Counter.lua      # Animated number labels
+  StarterPlayer/StarterPlayerScripts/Client/StoreUI.lua      # STORE panel, AUTO click toggle, [VIP] chat tag
 ```
 
 ## Running it in Roblox Studio

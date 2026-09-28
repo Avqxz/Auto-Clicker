@@ -101,8 +101,13 @@ local function createPetViewport(petData)
 	local model = PetModelFactory.Create(petData, { WithEffects = false })
 	model.Parent = worldModel
 
+	-- Pets face -Z, so frame them from the front (a little to the side and above), at a distance
+	-- that fits the model in view.
+	local center, size = model:GetBoundingBox()
+	local distance = math.max(size.X, size.Y, size.Z) * 1.3 + 0.4
 	local camera = Instance.new("Camera")
-	camera.CFrame = CFrame.new(Vector3.new(0, 0.9, 3.4), Vector3.new(0, 0.4, 0))
+	camera.FieldOfView = 50
+	camera.CFrame = CFrame.lookAt(center.Position + Vector3.new(distance * 0.35, distance * 0.25, -distance), center.Position)
 	camera.Parent = viewportFrame
 	viewportFrame.CurrentCamera = camera
 
@@ -583,7 +588,26 @@ local function createEggEntry(egg, layoutOrder)
 		HatchEggRemote:FireServer(egg.Id)
 	end)
 
-	eggEntries[egg.Id] = { Egg = egg, Frame = frame, HatchButton = hatchButton }
+	-- Triple Hatch pass owners get an x3 button.
+	local tripleButton = Instance.new("TextButton")
+	tripleButton.Name = "TripleButton"
+	tripleButton.AnchorPoint = Vector2.new(1, 0.5)
+	tripleButton.Position = UDim2.new(1, -112, 0.5, 0)
+	tripleButton.Size = UDim2.new(0, 64, 0, 48)
+	tripleButton.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
+	tripleButton.Font = Enum.Font.FredokaOne
+	tripleButton.TextScaled = true
+	tripleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	tripleButton.Text = "x3"
+	tripleButton.Visible = false
+	tripleButton.Parent = frame
+	styleButton(tripleButton)
+	Instance.new("UICorner", tripleButton).CornerRadius = UDim.new(0, 8)
+	tripleButton.MouseButton1Click:Connect(function()
+		HatchEggRemote:FireServer(egg.Id, 3)
+	end)
+
+	eggEntries[egg.Id] = { Egg = egg, Frame = frame, HatchButton = hatchButton, TripleButton = tripleButton }
 end
 
 do
@@ -598,6 +622,7 @@ local function refreshEggs()
 	for _, entry in pairs(eggEntries) do
 		local egg = entry.Egg
 		local locked = currentData.RebirthCount < egg.RequiredRebirths
+		entry.TripleButton.Visible = not locked and GameConfig.HasPass(currentData, "TripleHatch")
 		if locked then
 			entry.HatchButton.Text = "Locked"
 			entry.HatchButton.BackgroundColor3 = Color3.fromRGB(140, 159, 171)
@@ -796,7 +821,7 @@ local function refreshPets()
 		local ability = GameConfig.DescribePetAbility(pet.Name, pet.Golden)
 		group.AbilityLabel.Text = if ability then "★ " .. ability else ""
 
-		local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount, currentData.Skills)
+		local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount, currentData.Skills, currentData.Passes)
 		if info.EquippedCount > 0 then
 			group.EquipButton.Text = "Unequip"
 			group.EquipButton.BackgroundColor3 = Color3.fromRGB(160, 60, 60)
@@ -1246,8 +1271,10 @@ UserInputService.InputBegan:Connect(function(input,processed)
 end)
 local controls=Instance.new("Frame") controls.Name="UtilityControls" controls.BackgroundTransparency=1
 controls.AnchorPoint=Vector2.new(1,0) controls.Position=UDim2.new(1,-10,0,10) controls.Size=UDim2.fromOffset(106,154) controls.Parent=screenGui
+-- Callers pass y on a 54px grid; buttons are laid out tighter (40px tall, 46px apart) so the full
+-- column (up to 7 buttons) fits on short screens.
 local function utility(text,y,color)
- local b=Instance.new("TextButton") b.Size=UDim2.fromOffset(106,46) b.Position=UDim2.fromOffset(0,y)
+ local b=Instance.new("TextButton") b.Size=UDim2.fromOffset(106,40) b.Position=UDim2.fromOffset(0,math.floor(y*46/54))
  b.BackgroundColor3=color b.TextColor3=Color3.new(1,1,1) b.Text=text b.TextScaled=true b.Parent=controls
  Instance.new("UICorner",b).CornerRadius=UDim.new(0,10) styleButton(b) return b
 end
@@ -1384,5 +1411,17 @@ require(script.EconomyUI).Build({
  requestData=function() task.delay(1.1,function() Remotes.RequestData:FireServer() end) end, -- RequestData is rate-limited to 1/s
  sellRemote=Remotes:WaitForChild("SellPower"),
  buyBoostRemote=Remotes:WaitForChild("BuyBoost"),
+})
+-- STORE (gamepasses / products), the AUTO click toggle, and the [VIP] chat tag.
+require(script.StoreUI).Build({
+ screenGui=screenGui,
+ controls=controls,
+ utility=utility,
+ createPanel=createPanel,
+ bindTab=bindTab,
+ registerPanel=function(frame) table.insert(panels,frame) panelScales[frame]=Instance.new("UIScale",frame) end,
+ styleButton=styleButton,
+ dataRemote=DataUpdatedRemote,
+ clickRemote=ClickRemote,
 })
 resizeHUD() -- size the panels created above
