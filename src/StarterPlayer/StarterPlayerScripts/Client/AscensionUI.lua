@@ -43,12 +43,14 @@ function AscensionUI.Build(deps)
 	gemFrame.Parent = deps.screenGui
 	Instance.new("UICorner", gemFrame).CornerRadius = UDim.new(0, 12)
 	local gemStroke = Instance.new("UIStroke", gemFrame)
-	gemStroke.Thickness = 2
+	gemStroke.Thickness = 1.5
+	gemStroke.Transparency = 0.45
 	gemStroke.Color = Color3.fromRGB(40, 25, 80)
 	local gemLabel = text(gemFrame, {
 		Size = UDim2.fromScale(1, 1), TextScaled = true, TextColor3 = Color3.new(1, 1, 1),
 		TextStrokeTransparency = 0, TextStrokeColor3 = Color3.fromRGB(40, 25, 80), Text = "💎 0",
 	})
+	local gemCounter = require(script.Parent.Counter).new(gemLabel, function(v) return "💎 " .. fmt(v) end)
 	local gemPad = Instance.new("UIPadding", gemLabel)
 	gemPad.PaddingLeft, gemPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
 	gemPad.PaddingTop, gemPad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
@@ -188,7 +190,7 @@ function AscensionUI.Build(deps)
 	function api.Refresh(data)
 		local gems = data.Gems or 0
 		local skills = data.Skills or {}
-		gemLabel.Text = "💎 " .. fmt(gems)
+		gemCounter:Set(gems)
 
 		-- Ascend panel
 		local requirement = GameConfig.GetRebirthRequirement(data.RebirthCount)

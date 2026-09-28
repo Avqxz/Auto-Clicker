@@ -41,7 +41,8 @@ function EconomyUI.Build(deps)
 		f.Parent = deps.screenGui
 		Instance.new("UICorner", f).CornerRadius = UDim.new(0, 12)
 		local stroke = Instance.new("UIStroke", f)
-		stroke.Thickness = 2
+		stroke.Thickness = 1.5
+		stroke.Transparency = 0.45
 		stroke.Color = Color3.fromRGB(60, 45, 10)
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local pad = Instance.new("UIPadding", f)
@@ -52,7 +53,7 @@ function EconomyUI.Build(deps)
 
 	-- Coins counter (left of the Power counter) with a SELL button under it.
 	local coinPill = pill("CoinPill", UDim2.new(0.5, -138, 0, 12), UDim2.fromOffset(130, 56), Color3.fromRGB(240, 170, 30))
-	coinPill.Text = COIN .. " 0"
+	local coinCounter = require(script.Parent.Counter).new(coinPill, function(v) return COIN .. " " .. fmt(v) end)
 	local sell = Instance.new("TextButton")
 	sell.Name = "SellButton"
 	sell.AnchorPoint = Vector2.new(1, 0)
@@ -140,7 +141,7 @@ function EconomyUI.Build(deps)
 
 	local function refresh()
 		if not data then return end
-		coinPill.Text = COIN .. " " .. fmt(data.Coins or 0)
+		coinCounter:Set(data.Coins or 0)
 		sell.Text = if (data.Power or 0) >= 1
 			then "SELL → " .. COIN .. fmt(math.floor(math.floor(data.Power) * GameConfig.GetSellRate(data.RebirthCount)
 				* (1 + GameConfig.GetPetAbilityStats(deps.getEquippedPets(data)).CoinBonus)))

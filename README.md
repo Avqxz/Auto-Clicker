@@ -24,6 +24,7 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Daily rewards** — a 7-day login streak (Gems and Coins; 40 Gems + 10 Tokens on day 7); missing a day restarts it. The calendar opens by itself when a reward is ready.
 - **Quests** — 3 daily and 3 weekly quests (clicks, hatches, bosses, combos, Ascensions, upgrades, Legendary hatches) paying Gems; the same set for everyone each UTC day/week. QUESTS/DAILY buttons show a red dot when something can be claimed.
 - **Offline earnings** — auto-clickers keep earning 5% of their rate while you're away (8h max, more with the Offline Earnings skill), shown in a Welcome Back panel.
+- **UI polish** — clean mobile style (thin soft outlines, subtle gradients), the world blurs behind open menus, panels pop in, Power/Coins/Gems counters roll to new values, buttons light up on hover and dim on press, and Legendary/Mythic moments shake the camera (all motion respects the FX LOW toggle).
 - **Leaderboard** — Power and Ascensions show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
@@ -60,6 +61,8 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/GearUI.lua       # GEAR tab: equipped slots and gear bag
   StarterPlayer/StarterPlayerScripts/Client/RetentionUI.lua  # Quests, Daily rewards and Welcome Back panels
   StarterPlayer/StarterPlayerScripts/Client/EconomyUI.lua    # Coins counter, SELL button, boost timers and Token Shop
+  StarterPlayer/StarterPlayerScripts/Client/UIPolish.lua     # Menu blur, panel pop-in and camera shake
+  StarterPlayer/StarterPlayerScripts/Client/Counter.lua      # Animated number labels
 ```
 
 ## Running it in Roblox Studio

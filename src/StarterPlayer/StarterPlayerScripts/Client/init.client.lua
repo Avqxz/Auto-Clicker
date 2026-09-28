@@ -117,42 +117,43 @@ screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
 
+-- Clean mobile style: a thin, soft outline and a subtle top-to-bottom gradient.
+local CARD_GRADIENT = ColorSequence.new(Color3.new(1,1,1), Color3.fromRGB(222,236,242))
+local HOVER_GRADIENT = ColorSequence.new(Color3.new(1,1,1), Color3.new(1,1,1))
+local PRESS_GRADIENT = ColorSequence.new(Color3.fromRGB(215,215,215), Color3.fromRGB(185,196,202))
 local function styleCard(object, color)
  object.BackgroundColor3 = color
  object.BorderSizePixel = 0
  local stroke = Instance.new("UIStroke")
  stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
  stroke.Color = Color3.fromRGB(30, 54, 65)
- stroke.Thickness = 3
+ stroke.Transparency = 0.55
+ stroke.Thickness = 1.5
  stroke.Parent = object
  local gradient = Instance.new("UIGradient")
- gradient.Color = ColorSequence.new(Color3.new(1,1,1), Color3.fromRGB(215,237,243))
+ gradient.Color = CARD_GRADIENT
  gradient.Rotation = 90
  gradient.Parent = object
+ return gradient
 end
-local function addPattern(parent)
- local pattern=Instance.new("Frame") pattern.Name="StarPattern" pattern.Size=UDim2.fromScale(1,1)
- pattern.BackgroundTransparency=1 pattern.ClipsDescendants=true pattern.Parent=parent
- for row=0,5 do for col=0,8 do
-  local motif=Instance.new("Frame") motif.BackgroundTransparency=1
-  motif.Position=UDim2.new(col/8,0,row/5,0) motif.Size=UDim2.fromOffset(9,9)
-  motif.Rotation=45 motif.BorderSizePixel=0 motif.Parent=pattern
-  local line=Instance.new("UIStroke") line.Color=Color3.fromRGB(176,199,213)
-  line.Transparency=0.78 line.Thickness=1 line.Parent=motif
- end end
-end
+-- Buttons: one soft text outline, and hover/press feedback by brightening/darkening the gradient
+-- (not by scaling; some HUD buttons already carry a UIScale for small screens).
 local function styleButton(button)
- styleCard(button, button.BackgroundColor3)
+ local gradient = styleCard(button, button.BackgroundColor3)
  button.Font = Enum.Font.FredokaOne
+ button.AutoButtonColor = false
  local textOutline=Instance.new("UIStroke") textOutline.Color=Color3.fromRGB(26,43,51)
- textOutline.Thickness=1.8 textOutline.Parent=button
- button.TextStrokeColor3 = Color3.fromRGB(31,57,89)
- button.TextStrokeTransparency = 0
- button.TextStrokeColor3 = Color3.fromRGB(23,35,42)
+ textOutline.Thickness=1.2 textOutline.Transparency=0.25 textOutline.Parent=button
+ button.TextStrokeTransparency = 1
  local pad = Instance.new("UIPadding")
  pad.PaddingLeft = UDim.new(0,8) pad.PaddingRight = UDim.new(0,8)
  pad.PaddingTop = UDim.new(0,6) pad.PaddingBottom = UDim.new(0,6) pad.Parent = button
  local limit = Instance.new("UITextSizeConstraint") limit.MaxTextSize=25 limit.Parent=button
+ local hovered = false
+ button.MouseEnter:Connect(function() hovered = true gradient.Color = HOVER_GRADIENT end)
+ button.MouseLeave:Connect(function() hovered = false gradient.Color = CARD_GRADIENT end)
+ button.MouseButton1Down:Connect(function() gradient.Color = PRESS_GRADIENT end)
+ button.MouseButton1Up:Connect(function() gradient.Color = if hovered then HOVER_GRADIENT else CARD_GRADIENT end)
 end
 
 -- Coin counter
@@ -164,7 +165,6 @@ coinFrame.Size = UDim2.new(0, 260, 0, 56)
 coinFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 coinFrame.BorderSizePixel = 0
 coinFrame.Parent = screenGui
-addPattern(coinFrame)
 styleCard(coinFrame, Color3.fromRGB(245, 253, 255))
 
 Instance.new("UICorner", coinFrame).CornerRadius = UDim.new(0, 12)
@@ -178,8 +178,8 @@ coinLabel.TextStrokeTransparency = 0
 coinLabel.TextStrokeColor3 = Color3.fromRGB(35,70,105)
 coinLabel.TextScaled = true
 coinLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-coinLabel.Text = "⚡ 0"
 coinLabel.Parent = coinFrame
+local powerCounter = require(script.Counter).new(coinLabel, function(v) return "⚡ " .. formatNumber(v) end)
 
 -- Click power label (clicking is now a full-screen tap, not a dedicated button)
 local powerLabel = Instance.new("TextLabel")
@@ -256,15 +256,16 @@ local function createPanel(name, title)
 	styleCard(frame, Color3.fromRGB(252, 254, 255))
 	frame.Visible = false
 	frame.Parent = screenGui
- addPattern(frame)
 	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
 
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.BackgroundTransparency = 0
  titleLabel.BackgroundColor3 = Color3.fromRGB(0, 196, 237)
  titleLabel.TextStrokeColor3 = Color3.fromRGB(25,48,60)
- titleLabel.TextStrokeTransparency = 0
- local headingStroke=Instance.new("UIStroke",titleLabel) headingStroke.Thickness=2 headingStroke.Color=Color3.fromRGB(29,50,60)
+ titleLabel.TextStrokeTransparency = 0.4
+ local headingStroke=Instance.new("UIStroke",titleLabel) headingStroke.Thickness=1.5 headingStroke.Transparency=0.4 headingStroke.Color=Color3.fromRGB(29,50,60)
+ local headingGradient=Instance.new("UIGradient",titleLabel) headingGradient.Rotation=90
+ headingGradient.Color=ColorSequence.new(Color3.new(1,1,1),Color3.fromRGB(200,222,232))
  local titleCorner=Instance.new("UICorner",titleLabel) titleCorner.CornerRadius=UDim.new(0,12)
 	titleLabel.Size = UDim2.new(1, 0, 0, 54)
 	titleLabel.Font = Enum.Font.FredokaOne
@@ -1060,7 +1061,7 @@ local function refreshUI()
 	local totalClickPower = getClickPower(currentData)
 	comboWindow = GameConfig.GetComboWindow(currentData.UpgradeLevels, GameConfig.GetBonusStats(currentData, getEquippedPets(currentData)))
 
-	coinLabel.Text = "⚡ " .. formatNumber(currentData.Power)
+	powerCounter:Set(currentData.Power)
 	powerLabel.Text = "+" .. formatNumber(totalClickPower) .. " ⚡ per click"
 
 	local requirement = GameConfig.GetRebirthRequirement(currentData.RebirthCount)
@@ -1282,9 +1283,16 @@ nextGoal(currentData)
 DataUpdatedRemote.OnClientEvent:Connect(nextGoal)
 local flash=Instance.new("Frame") flash.Name="CelebrationFlash" flash.Size=UDim2.fromScale(1,1)
 flash.BackgroundColor3=Color3.new(1,1,1) flash.BackgroundTransparency=1 flash.ZIndex=20 flash.Parent=screenGui
+-- Blur behind menus, panel pop-in, and camera shake for rare moments.
+local polish=require(script.UIPolish).Start({
+ panels=panels,
+ panelScales=panelScales,
+ isReducedMotion=function() return reducedMotion end,
+})
 local function celebrate(rarity)
  playSound("Rare")
  if reducedMotion then return end
+ if rarity=="Legendary" or rarity=="Mythic" then polish.Shake(rarity=="Mythic" and 0.9 or 0.6, 0.45) end
  local color=GameConfig.RarityColors[rarity] or Color3.fromRGB(189,128,255)
  flash.BackgroundColor3=color flash.BackgroundTransparency=0.65
  TweenService:Create(flash,TweenInfo.new(0.45),{BackgroundTransparency=1}):Play()
