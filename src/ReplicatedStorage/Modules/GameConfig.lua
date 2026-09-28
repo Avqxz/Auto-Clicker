@@ -286,6 +286,86 @@ GameConfig.Zones = {
 
 GameConfig.EggHatchRange = 40 -- studs; eggs outside the starting zone must be hatched in person
 
+-- ===== Retention: daily rewards, quests, offline earnings =====
+-- Days/weeks are UTC (os.time); weeks start Monday. Daily quests are the same for everyone on a
+-- given day (picked from the pool with the day as the seed); weekly quests likewise per week.
+
+GameConfig.OfflineBaseRate = 0.05 -- share of auto income earned while offline, before the skill
+
+-- Day 7 is the top of the streak; claiming after it starts over at day 1. Missing a day resets.
+-- Coins rewards are a share of the player's current Ascension requirement, so they stay useful.
+GameConfig.DailyRewards = {
+	{ Gems = 5 },
+	{ CoinsPct = 0.25 },
+	{ Gems = 10 },
+	{ CoinsPct = 0.5 },
+	{ Gems = 15 },
+	{ CoinsPct = 1 },
+	{ Gems = 40 },
+}
+
+GameConfig.QuestsPerPeriod = 3
+GameConfig.QuestPool = {
+	-- Kind is what the server tracks: Click, Hatch, HatchLegendary (Legendary or better), BossWin,
+	-- Ascend, Upgrade (levels bought), Combo (highest combo reached, not a running total).
+	Daily = {
+		{ Id = "d_click", Kind = "Click", Target = 3000, Text = "Click 3,000 times", Gems = 6 },
+		{ Id = "d_hatch", Kind = "Hatch", Target = 10, Text = "Hatch 10 eggs", Gems = 6 },
+		{ Id = "d_boss", Kind = "BossWin", Target = 2, Text = "Defeat 2 bosses", Gems = 8 },
+		{ Id = "d_combo", Kind = "Combo", Target = 100, Text = "Reach a 100x combo", Gems = 5 },
+		{ Id = "d_upgrade", Kind = "Upgrade", Target = 25, Text = "Buy 25 upgrade levels", Gems = 5 },
+		{ Id = "d_ascend", Kind = "Ascend", Target = 1, Text = "Ascend once", Gems = 8 },
+	},
+	Weekly = {
+		{ Id = "w_click", Kind = "Click", Target = 25000, Text = "Click 25,000 times", Gems = 35 },
+		{ Id = "w_ascend", Kind = "Ascend", Target = 5, Text = "Ascend 5 times", Gems = 50 },
+		{ Id = "w_boss", Kind = "BossWin", Target = 15, Text = "Defeat 15 bosses", Gems = 45 },
+		{ Id = "w_legendary", Kind = "HatchLegendary", Target = 3, Text = "Hatch 3 Legendary+ pets", Gems = 50 },
+		{ Id = "w_hatch", Kind = "Hatch", Target = 100, Text = "Hatch 100 eggs", Gems = 35 },
+	},
+}
+
+function GameConfig.GetDayIndex(t)
+	return math.floor((t or os.time()) / 86400)
+end
+
+function GameConfig.GetWeekIndex(t)
+	return math.floor(((t or os.time()) - 4 * 86400) / 604800) -- Unix time 0 was a Thursday; shift to Monday
+end
+
+function GameConfig.GetQuestDef(group, id)
+	for _, quest in ipairs(GameConfig.QuestPool[group]) do
+		if quest.Id == id then
+			return quest
+		end
+	end
+	return nil
+end
+
+-- The period's quest ids, picked from the pool with the period index as the seed.
+function GameConfig.PickQuests(group, periodIndex)
+	local pool = table.clone(GameConfig.QuestPool[group])
+	local rng = Random.new(periodIndex * 7919 + (if group == "Weekly" then 1 else 0))
+	local picked = {}
+	for _ = 1, math.min(GameConfig.QuestsPerPeriod, #pool) do
+		local quest = table.remove(pool, rng:NextInteger(1, #pool))
+		table.insert(picked, quest.Id)
+	end
+	return picked
+end
+
+-- The streak day (1-7) the next claim would be, and whether it can be claimed today.
+function GameConfig.GetDailyRewardState(daily, now)
+	local today = GameConfig.GetDayIndex(now)
+	local last = daily and daily.LastClaimDay or -1
+	local streak = daily and daily.Streak or 0
+	if last == today then
+		return streak, false
+	end
+	local nextDay = if last == today - 1 then streak % #GameConfig.DailyRewards + 1 else 1
+	return nextDay, true
+end
+
 -- ===== Bosses & equipment =====
 -- Each zone has a boss at its far end. Fights are personal and timed: while a player is fighting,
 -- their clicks deal damage (same power/combo/crit math) instead of earning coins. Winning pays

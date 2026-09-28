@@ -19,6 +19,9 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Skill tree** — permanent nodes bought with Gems in three branches: Power (Click Mastery, Crit Mastery, Mega Crits, Combo Boost), Automation (Auto Power, Offline Earnings, Head Start) and Luck (Egg Luck, Pet Slots, Golden Touch). Later nodes need their branch's first node.
 - **Bosses** — each zone has a boss at its far end (Mossback, Frost Golem, Magma King, Gummy Tyrant, Void Titan). A Fight prompt starts a personal 60-second fight: your clicks damage the boss (same power/combo/crit math) instead of earning coins. Wins pay coins, Gems and a guaranteed gear drop; short cooldowns after wins and losses.
 - **Equipment** — Gloves / Aura / Core / Artifact slots (GEAR tab). Each boss drops one of four themed pieces, Common (Forest) up to Mythic (Space), adding click power, crit chance/damage or auto income; Ember Idol and Quantum Gloves add a burst (every 100th click x5 / x10). Up to 40 pieces in the bag; Discard needs a second tap.
+- **Daily rewards** — a 7-day login streak (Gems and coins, 40 Gems on day 7); missing a day restarts it. The calendar opens by itself when a reward is ready.
+- **Quests** — 3 daily and 3 weekly quests (clicks, hatches, bosses, combos, Ascensions, upgrades, Legendary hatches) paying Gems; the same set for everyone each UTC day/week. QUESTS/DAILY buttons show a red dot when something can be claimed.
+- **Offline earnings** — auto-clickers keep earning 5% of their rate while you're away (8h max, more with the Offline Earnings skill), shown in a Welcome Back panel.
 - **Leaderboard** — Coins and Rebirths show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
@@ -46,12 +49,14 @@ src/
   ServerScriptService/Server/MapBuilder.lua             # Builds the five biome zones, walkways, rebirth gates, lighting and interactives
   ServerScriptService/Server/AssetScenery.lua           # Scatters optional prop assets (trees, rocks, bushes) along the zone edges
   ServerScriptService/Server/PetFollowers.lua           # Spawns/animates the equipped pets that orbit each player
+  ServerScriptService/Server/Quests.lua                 # Daily/weekly quest progress and the daily login reward
   StarterPlayer/StarterPlayerScripts/Client/init.client.lua  # Builds the HUD/Shop/Eggs/Pets UI and talks to the server
   StarterPlayer/StarterPlayerScripts/Client/ZoneGates.lua    # Opens the zone gates the local player has unlocked
   StarterPlayer/StarterPlayerScripts/Client/ClickFeel.lua    # Floating click numbers, combo meter and OVERDRIVE effects
   StarterPlayer/StarterPlayerScripts/Client/AscensionUI.lua  # Ascend panel, Gem-bought skill tree panel and HUD gem counter
   StarterPlayer/StarterPlayerScripts/Client/BossUI.lua       # Boss fight HUD (HP bar, timer) and results
   StarterPlayer/StarterPlayerScripts/Client/GearUI.lua       # GEAR tab: equipped slots and gear bag
+  StarterPlayer/StarterPlayerScripts/Client/RetentionUI.lua  # Quests, Daily rewards and Welcome Back panels
 ```
 
 ## Running it in Roblox Studio

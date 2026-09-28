@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerData = require(script.PlayerData)
+local Quests = require(script.Quests)
 local MapBuilder = require(script.MapBuilder)
 local PetFollowers = require(script.PetFollowers)
 
@@ -48,6 +49,9 @@ local BossStateRemote = createRemoteEvent("BossState")
 local EquipGearRemote = createRemoteEvent("EquipGear")
 local UnequipGearRemote = createRemoteEvent("UnequipGear")
 local DiscardGearRemote = createRemoteEvent("DiscardGear")
+local ClaimQuestRemote = createRemoteEvent("ClaimQuest")
+local ClaimDailyRemote = createRemoteEvent("ClaimDaily")
+local OfflineEarningsRemote = createRemoteEvent("OfflineEarnings")
 local PickStarterPetRemote = createRemoteEvent("PickStarterPet")
 
 local FeedbackRemote=createRemoteEvent("Feedback")
@@ -146,16 +150,19 @@ Players.PlayerAdded:Connect(function(player)
  if not player.Parent then PlayerData.Release(player) return end
 	setupLeaderstats(player, data)
 
-	-- Offline Earnings skill: a share of auto income for the time since the last save (capped).
-	local offlineRate = 0.1 * GameConfig.GetSkillLevel(data.Skills, "OfflineEarnings")
-	if offlineRate > 0 and data.LastOnline then
+	Quests.Refresh(data)
+
+	-- Offline earnings: a base share of auto income for the time since the last save (capped),
+	-- raised by the Offline Earnings skill.
+	local offlineRate = GameConfig.OfflineBaseRate + 0.1 * GameConfig.GetSkillLevel(data.Skills, "OfflineEarnings")
+	if data.LastOnline then
 		local seconds = math.clamp(os.time() - data.LastOnline, 0, GameConfig.OfflineCapSeconds)
 		local offline = math.floor(GameConfig.GetAutoIncome(data, getEquippedPets(data)) * seconds * offlineRate)
 		if offline > 0 then
 			earn(data, offline)
 			updateLeaderstats(player)
 			task.delay(3, function() -- after the client UI is up
-				FeedbackRemote:FireClient(player, "Purchase", "Welcome back! +" .. offline .. " coins earned offline")
+				OfflineEarningsRemote:FireClient(player, offline, seconds, offlineRate)
 			end)
 		end
 	end
@@ -215,6 +222,7 @@ local function winBossFight(player, data, fight)
 		gems *= 2
 	end
 
+	Quests.Track(data, "BossWin", 1)
 	BossStateRemote:FireClient(player, "win", { Coins = coins, Gems = gems, Gear = dropId })
 	updateLeaderstats(player)
 	pushData(player)
@@ -306,6 +314,33 @@ DiscardGearRemote.OnServerEvent:Connect(function(player, uid)
 	end
 end)
 
+-- ===== Quests & daily reward =====
+
+ClaimQuestRemote.OnServerEvent:Connect(function(player, group, index)
+	if (group ~= "Daily" and group ~= "Weekly") or type(index) ~= "number" or not allow(player, "quest", 0.2) then return end
+	local data = PlayerData.Get(player)
+	local def = data and Quests.Claim(data, group, index)
+	if def then
+		FeedbackRemote:FireClient(player, "Purchase", "Quest complete: " .. def.Text .. "  +" .. def.Gems .. " 💎")
+		pushData(player)
+	end
+end)
+
+ClaimDailyRemote.OnServerEvent:Connect(function(player)
+	if not allow(player, "daily", 1) then return end
+	local data = PlayerData.Get(player)
+	local reward = data and Quests.ClaimDaily(data)
+	if reward then
+		if reward.Coins > 0 then
+			earn(data, reward.Coins)
+		end
+		FeedbackRemote:FireClient(player, "Ascend", "Day " .. reward.Day .. " reward: "
+			.. (if reward.Gems > 0 then "+" .. reward.Gems .. " 💎" else "+" .. reward.Coins .. " coins"))
+		updateLeaderstats(player)
+		pushData(player)
+	end
+end)
+
 -- ===== Clicking =====
 -- Each click extends the player's combo (if it lands within the combo window), picks up the
 -- combo tier's multiplier, and rolls for a crit. The client only displays the result.
@@ -331,6 +366,8 @@ local function handleClick(player)
 	end
 	combo.Count += 1
 	combo.Last = now
+	Quests.Track(data, "Click", 1)
+	Quests.Track(data, "Combo", combo.Count)
 
 	local skills = data.Skills
 	local gear = GameConfig.GetGearStats(data)
@@ -394,6 +431,7 @@ local function buyLevels(player, list, levelsKey, id, amount, onLevel)
 
 	data.Coins -= cost
 	levels[id] = currentLevel + count
+	Quests.Track(data, "Upgrade", count)
 	if onLevel then onLevel(data, item, count) end
 	FeedbackRemote:FireClient(player, "Purchase", item.Name .. (if count > 1 then " x" .. count else "") .. " purchased!")
 
@@ -450,6 +488,7 @@ local function handleHatchEgg(player, eggId)
 	if #data.Pets>=GameConfig.MaxPets then FeedbackRemote:FireClient(player,"Info","Pet storage full. Fuse duplicates to make room.") return end
  data.Coins -= egg.Cost
  data.EggsHatched=(data.EggsHatched or 0)+1
+	Quests.Track(data, "Hatch", 1)
 
 	local rolled = GameConfig.RollPet(egg, data.Skills)
 	local uid = data.NextPetUid
@@ -463,6 +502,9 @@ local function handleHatchEgg(player, eggId)
 		Golden = false,
 	}
 	table.insert(data.Pets, newPet)
+	if newPet.Rarity == "Legendary" or newPet.Rarity == "Mythic" then
+		Quests.Track(data, "HatchLegendary", 1)
+	end
 
 	local equipChanged = false
 	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills) then
@@ -648,6 +690,7 @@ local function handleAscend(player)
 	data.UpgradeLevels = {}
 	data.AutoClickerLevels = {}
 	data.RebirthCount += 1
+	Quests.Track(data, "Ascend", 1)
 	FeedbackRemote:FireClient(player, "Ascend", "ASCENDED! +" .. gems .. " Gems • Power x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount))
 
 	updateLeaderstats(player)

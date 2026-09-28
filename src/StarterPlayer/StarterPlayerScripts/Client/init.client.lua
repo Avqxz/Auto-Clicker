@@ -1317,3 +1317,21 @@ require(script.BossUI).Start({
  celebrate=celebrate,
  hideDuringFight={objective},
 })
+
+-- Quests, Daily rewards and the Welcome Back (offline earnings) panel, plus their buttons.
+require(script.RetentionUI).Build({
+ controls=controls,
+ utility=utility,
+ createPanel=createPanel,
+ bindTab=bindTab,
+ panels=panels,
+ registerPanel=function(frame) table.insert(panels,frame) panelScales[frame]=Instance.new("UIScale",frame) end,
+ styleButton=styleButton,
+ formatNumber=formatNumber,
+ dataRemote=DataUpdatedRemote,
+ requestData=function() Remotes.RequestData:FireServer() end,
+ claimQuestRemote=Remotes:WaitForChild("ClaimQuest"),
+ claimDailyRemote=Remotes:WaitForChild("ClaimDaily"),
+ offlineRemote=Remotes:WaitForChild("OfflineEarnings"),
+})
+resizeHUD() -- size the panels created above
