@@ -21,7 +21,7 @@ local function clock(seconds)
 end
 
 -- deps: { screenGui, controls, utility(text, y, color), createPanel, bindTab, registerPanel,
---         styleButton, formatNumber, dataRemote, requestData, sellRemote, buyBoostRemote }
+--         styleButton, formatNumber, dataRemote, getEquippedPets(data), requestData, sellRemote, buyBoostRemote }
 function EconomyUI.Build(deps)
 	local fmt = deps.formatNumber
 	local data
@@ -142,7 +142,8 @@ function EconomyUI.Build(deps)
 		if not data then return end
 		coinPill.Text = COIN .. " " .. fmt(data.Coins or 0)
 		sell.Text = if (data.Power or 0) >= 1
-			then "SELL → " .. COIN .. fmt(math.floor(math.floor(data.Power) * GameConfig.GetSellRate(data.RebirthCount)))
+			then "SELL → " .. COIN .. fmt(math.floor(math.floor(data.Power) * GameConfig.GetSellRate(data.RebirthCount)
+				* (1 + GameConfig.GetPetAbilityStats(deps.getEquippedPets(data)).CoinBonus)))
 			else "SELL ⚡"
 		tokensHeader.Text = TOKEN .. " " .. fmt(data.Tokens or 0) .. " Tokens"
 		for _, card in pairs(cards) do

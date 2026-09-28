@@ -13,7 +13,7 @@ local ClickFeel = {}
 
 local OVERDRIVE = GameConfig.Combo.Tiers[1]
 
--- deps: { screenGui, resultRemote, formatNumber, getLevels(), isReducedMotion() }
+-- deps: { screenGui, resultRemote, formatNumber, getComboWindow(), isReducedMotion() }
 function ClickFeel.Start(deps)
 	local player = Players.LocalPlayer
 	local screenGui = deps.screenGui
@@ -97,7 +97,7 @@ function ClickFeel.Start(deps)
 	-- (client-created BillboardGuis didn't render reliably), rising and fading over 0.8s.
 	local popups = {} -- { label, offset (studs), born }
 	local POP_LIFE = 0.8
-	-- mode "boss" = the click hit a boss; burstName = a gear burst triggered on this click.
+	-- mode "boss" = the click hit a boss; burstName = a gear/pet effect that fired on this click.
 	local function popAbove(amount, crit, mode, burstName)
 		local big = crit or burstName ~= nil
 		local label = Instance.new("TextLabel")
@@ -166,7 +166,7 @@ function ClickFeel.Start(deps)
 		if comboCount == 0 then
 			return
 		end
-		local window = GameConfig.GetComboWindow(deps.getLevels())
+		local window = deps.getComboWindow()
 		local left = 1 - (os.clock() - lastHit) / window
 		if left <= 0 then
 			comboCount = 0

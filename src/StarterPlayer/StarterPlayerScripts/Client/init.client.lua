@@ -28,6 +28,7 @@ local EggResultRemote = Remotes:WaitForChild("EggResult")
 local EggLockedRemote = Remotes:WaitForChild("EggLocked")
 local ZoneLockedRemote = Remotes:WaitForChild("ZoneLocked")
 local PickStarterPetRemote = Remotes:WaitForChild("PickStarterPet")
+local comboWindow = GameConfig.Combo.BaseWindow -- cached on each data update (upgrades + gear + pet abilities)
 
 local currentData = {
 	Power = 0, -- click currency (upgrades, Ascension)
@@ -544,7 +545,8 @@ local function createEggEntry(egg, layoutOrder)
 
 	local oddsText = {}
 	for _, pet in ipairs(egg.Pets) do
-		table.insert(oddsText, pet.Name .. " (" .. pet.Rarity .. ")")
+		local star = if GameConfig.PetAbilities[pet.Name] then " ★" else "" -- ★ = has an ability
+		table.insert(oddsText, pet.Name .. " (" .. pet.Rarity .. star .. ")")
 	end
 
 	local oddsLabel = Instance.new("TextLabel")
@@ -707,6 +709,19 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 
 	Instance.new("UICorner", fuseButton).CornerRadius = UDim.new(0, 8)
 
+	local abilityLabel = Instance.new("TextLabel")
+	abilityLabel.Name = "AbilityLabel"
+	abilityLabel.BackgroundTransparency = 1
+	abilityLabel.Position = UDim2.new(0, 92, 0, 66)
+	abilityLabel.Size = UDim2.new(1, -242, 0, 32)
+	abilityLabel.Font = Enum.Font.FredokaOne
+	abilityLabel.TextSize = 13
+	abilityLabel.TextWrapped = true
+	abilityLabel.TextXAlignment = Enum.TextXAlignment.Left
+	abilityLabel.TextYAlignment = Enum.TextYAlignment.Top
+	abilityLabel.TextColor3 = Color3.fromRGB(150, 80, 220)
+	abilityLabel.Parent = frame
+
 	local group = {
 		Frame = frame,
 		IconContainer = iconContainer,
@@ -714,6 +729,7 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 		NameLabel = nameLabel,
 		InfoLabel = infoLabel,
 		EquippedLabel = equippedLabel,
+		AbilityLabel = abilityLabel,
 		EquipButton = equipButton,
 		FuseButton = fuseButton,
 		EquipConnection = nil,
@@ -776,6 +792,8 @@ local function refreshPets()
 		group.NameLabel.TextColor3 = color:Lerp(Color3.fromRGB(29,49,67),0.35)
 		group.InfoLabel.Text = pet.Rarity .. " - " .. formatMultiplier(pet.Multiplier) .. " - Owned " .. info.Count
 		group.EquippedLabel.Text = "Equipped: " .. info.EquippedCount
+		local ability = GameConfig.DescribePetAbility(pet.Name, pet.Golden)
+		group.AbilityLabel.Text = if ability then "★ " .. ability else ""
 
 		local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount, currentData.Skills)
 		if info.EquippedCount > 0 then
@@ -891,7 +909,9 @@ local function showPetReveal(pet)
 	revealFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 	revealStroke.Color = color
 	revealLabel.TextColor3 = color
+	local ability = GameConfig.PetAbilities[pet.Name]
 	revealLabel.Text = string.format("%s\n%s  %s", displayName, pet.Rarity, formatMultiplier(pet.Multiplier))
+		.. (if ability then "  ★ " .. ability.Name else "")
 
 	TweenService:Create(
 		revealFrame,
@@ -1038,6 +1058,7 @@ end)
 
 local function refreshUI()
 	local totalClickPower = getClickPower(currentData)
+	comboWindow = GameConfig.GetComboWindow(currentData.UpgradeLevels, GameConfig.GetBonusStats(currentData, getEquippedPets(currentData)))
 
 	coinLabel.Text = "⚡ " .. formatNumber(currentData.Power)
 	powerLabel.Text = "+" .. formatNumber(totalClickPower) .. " ⚡ per click"
@@ -1212,7 +1233,7 @@ require(script.ClickFeel).Start({
  screenGui=screenGui,
  resultRemote=Remotes:WaitForChild("ClickResult"),
  formatNumber=formatNumber,
- getLevels=function() return currentData.UpgradeLevels end,
+ getComboWindow=function() return comboWindow end,
  isReducedMotion=function() return reducedMotion end,
 })
 ClickRemote.OnClientEvent:Connect(function() end)
@@ -1351,6 +1372,7 @@ require(script.EconomyUI).Build({
  styleButton=styleButton,
  formatNumber=formatNumber,
  dataRemote=DataUpdatedRemote,
+ getEquippedPets=getEquippedPets,
  requestData=function() task.delay(1.1,function() Remotes.RequestData:FireServer() end) end, -- RequestData is rate-limited to 1/s
  sellRemote=Remotes:WaitForChild("SellPower"),
  buyBoostRemote=Remotes:WaitForChild("BuyBoost"),

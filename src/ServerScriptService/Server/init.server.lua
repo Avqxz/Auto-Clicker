@@ -202,6 +202,7 @@ local function winBossFight(player, data, fight)
 	local boss = fight.Boss
 	endBossFight(player, fight, true)
 	local coins = boss.RewardCoins * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+		* (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).CoinBonus)
 	earnCoins(data, coins)
 	local gems = boss.RewardGems
 	data.Gems = (data.Gems or 0) + gems
@@ -355,7 +356,8 @@ SellPowerRemote.OnServerEvent:Connect(function(player)
 		return
 	end
 	local sold = math.floor(data.Power)
-	local coins = math.floor(sold * GameConfig.GetSellRate(data.RebirthCount))
+	local coins = math.floor(sold * GameConfig.GetSellRate(data.RebirthCount)
+		* (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).CoinBonus))
 	data.Power -= sold
 	earnCoins(data, coins)
 	FeedbackRemote:FireClient(player, "Purchase", "Sold " .. sold .. " Power for " .. coins .. " Coins")
@@ -432,30 +434,46 @@ local function handleClick(player)
 	end
 
 	local levels = data.UpgradeLevels
+	local bonus = GameConfig.GetBonusStats(data, getEquippedPets(data)) -- gear + pet abilities
 	local combo = comboStates[player.UserId]
-	if not combo or now - combo.Last > GameConfig.GetComboWindow(levels) then
+	if not combo or now - combo.Last > GameConfig.GetComboWindow(levels, bonus) then
 		combo = { Count = 0 }
 		comboStates[player.UserId] = combo
 	end
 	combo.Count += 1
 	combo.Last = now
+
+	-- Named effects that fired on this click (shown on the floating number).
+	local procName
+	-- Surge abilities: a chance to fill the combo straight to OVERDRIVE.
+	local overdrive = GameConfig.Combo.Tiers[1].MinCombo
+	for _, surge in ipairs(bonus.Surges) do
+		if combo.Count < overdrive and math.random() < surge.Chance then
+			combo.Count = overdrive
+			procName = surge.Name
+		end
+	end
 	Quests.Track(data, "Click", 1)
 	Quests.Track(data, "Combo", combo.Count)
 
 	local skills = data.Skills
-	local gear = GameConfig.GetGearStats(data)
-	local crit = math.random() < GameConfig.GetCritChance(levels, skills, gear)
-	local earned = getClickPower(data) * GameConfig.GetComboMultiplier(combo.Count, skills)
-		* (if crit then GameConfig.GetCritDamage(levels, skills, gear) else 1)
+	local crit = math.random() < GameConfig.GetCritChance(levels, skills, bonus)
+	local earned = getClickPower(data) * GameConfig.GetComboMultiplier(combo.Count, skills, bonus)
+		* (if crit then GameConfig.GetCritDamage(levels, skills, bonus) else 1)
 
-	-- Gear bursts: every Nth click is multiplied.
+	-- Bursts (gear + pets): every Nth click is multiplied. Procs (pets): a chance to multiply.
 	local clicks = (burstCounters[player.UserId] or 0) + 1
 	burstCounters[player.UserId] = clicks
-	local burstName
-	for _, burst in ipairs(gear.Bursts) do
+	for _, burst in ipairs(bonus.Bursts) do
 		if clicks % burst.Every == 0 then
 			earned *= burst.Multiplier
-			burstName = burst.Name
+			procName = burst.Name
+		end
+	end
+	for _, proc in ipairs(bonus.Procs) do
+		if math.random() < proc.Chance then
+			earned *= proc.Multiplier
+			procName = proc.Name
 		end
 	end
 
@@ -465,7 +483,7 @@ local function handleClick(player)
 	local bossPos = fight and mapRefs.Bosses[fight.Boss.Id] and mapRefs.Bosses[fight.Boss.Id].Position
 	if fight and root and bossPos and (root.Position - bossPos).Magnitude <= GameConfig.BossRange then
 		fight.Health = math.max(0, fight.Health - earned)
-		ClickResultRemote:FireClient(player, earned, crit, combo.Count, "boss", burstName)
+		ClickResultRemote:FireClient(player, earned, crit, combo.Count, "boss", procName)
 		BossStateRemote:FireClient(player, "hp", fight.Health)
 		if fight.Health <= 0 then
 			winBossFight(player, data, fight)
@@ -474,7 +492,7 @@ local function handleClick(player)
 	end
 
 	earnPower(data,earned)
-	ClickResultRemote:FireClient(player, earned, crit, combo.Count, nil, burstName)
+	ClickResultRemote:FireClient(player, earned, crit, combo.Count, nil, procName)
 	updateLeaderstats(player)
 	pushData(player)
 end
@@ -563,7 +581,8 @@ local function handleHatchEgg(player, eggId)
  data.EggsHatched=(data.EggsHatched or 0)+1
 	Quests.Track(data, "Hatch", 1)
 
-	local rolled = GameConfig.RollPet(egg, data.Skills, GameConfig.GetBoostMultiplier(data, "Luck"))
+	local rolled = GameConfig.RollPet(egg, data.Skills,
+		GameConfig.GetBoostMultiplier(data, "Luck") * (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).EggLuck))
 	local uid = data.NextPetUid
 	data.NextPetUid += 1
 

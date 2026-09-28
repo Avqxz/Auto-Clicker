@@ -120,21 +120,23 @@ GameConfig.ClickBoosts = {
 }
 
 -- `skills` (the player's skill-tree levels) is optional everywhere below.
--- `gear` is GameConfig.GetGearStats(data); both it and `skills` are optional.
-function GameConfig.GetCritChance(levels, skills, gear)
+-- `bonus` is GameConfig.GetBonusStats(data, equippedPets) (gear + pet abilities); it and `skills`
+-- are optional.
+function GameConfig.GetCritChance(levels, skills, bonus)
 	return GameConfig.Crit.BaseChance + (levels.CritChance or 0) * GameConfig.ClickBoosts[1].PerLevel
 		+ GameConfig.GetSkillLevel(skills, "CritMastery") * 0.01
-		+ (gear and gear.CritChance or 0)
+		+ (bonus and bonus.CritChance or 0)
 end
 
-function GameConfig.GetCritDamage(levels, skills, gear)
+function GameConfig.GetCritDamage(levels, skills, bonus)
 	return GameConfig.Crit.BaseDamage + (levels.CritDamage or 0) * GameConfig.ClickBoosts[2].PerLevel
 		+ GameConfig.GetSkillLevel(skills, "MegaCrits") * 0.25
-		+ (gear and gear.CritDamage or 0)
+		+ (bonus and bonus.CritDamage or 0)
 end
 
-function GameConfig.GetComboWindow(levels)
+function GameConfig.GetComboWindow(levels, bonus)
 	return GameConfig.Combo.BaseWindow + (levels.ComboWindow or 0) * GameConfig.ClickBoosts[3].PerLevel
+		+ (bonus and bonus.ComboWindow or 0)
 end
 
 function GameConfig.GetComboTier(comboCount)
@@ -146,10 +148,11 @@ function GameConfig.GetComboTier(comboCount)
 	return GameConfig.Combo.Tiers[#GameConfig.Combo.Tiers]
 end
 
--- The tier's multiplier with the Combo Boost skill, which grows only the bonus part (x2 -> x2.2 at level 1).
-function GameConfig.GetComboMultiplier(comboCount, skills)
-	local bonus = GameConfig.GetComboTier(comboCount).Multiplier - 1
-	return 1 + bonus * (1 + 0.2 * GameConfig.GetSkillLevel(skills, "ComboBoost"))
+-- The tier's multiplier with Combo Boost (skill) and combo-bonus abilities, which grow only the bonus
+-- part (x2 -> x2.2 with Combo Boost 1).
+function GameConfig.GetComboMultiplier(comboCount, skills, bonus)
+	local extra = GameConfig.GetComboTier(comboCount).Multiplier - 1
+	return 1 + extra * (1 + 0.2 * GameConfig.GetSkillLevel(skills, "ComboBoost") + (bonus and bonus.ComboBonus or 0))
 end
 
 -- "current → next" text for a click boost at `level`.
@@ -618,6 +621,92 @@ GameConfig.Eggs = {
 	},
 }
 
+-- ===== Pet abilities =====
+-- Epic+ pets have an ability that works while equipped (on top of their multiplier). Kinds:
+--   Burst = { Every, Multiplier }: every Nth click is multiplied (shares the counter with gear bursts)
+--   Proc = { Chance, Multiplier }: each click has a chance to be multiplied
+--   Surge = { Chance }: each click has a chance to fill the combo straight to OVERDRIVE
+--   passives: CritChance, CritDamage, AutoPower, EggLuck, ComboWindow (sec), ComboBonus, CoinBonus
+-- Golden pets get 1.5x the passive values (bursts/procs/surges are unchanged).
+
+GameConfig.GoldenAbilityScale = 1.5
+GameConfig.PetAbilities = {
+	Dragon = { Name = "Overcharge", Burst = { Every = 50, Multiplier = 3 } },
+	Phoenix = { Name = "Flame Burst", Burst = { Every = 30, Multiplier = 5 } },
+	Griffin = { Name = "Keen Eye", CritChance = 0.03 },
+	Unicorn = { Name = "Lucky Horn", EggLuck = 0.15 },
+	["Ancient Dragon"] = { Name = "Overcharge", Burst = { Every = 30, Multiplier = 10 } },
+	["Celestial Phoenix"] = { Name = "Void Surge", Surge = { Chance = 0.05 } },
+	["Magma Golem"] = { Name = "Molten Core", AutoPower = 0.25 },
+	["Fire Serpent"] = { Name = "Scorch", CritDamage = 0.5 },
+	["Inferno Dragon"] = { Name = "Inferno", Burst = { Every = 25, Multiplier = 8 } },
+	["Volcano Titan"] = { Name = "Eruption", Proc = { Chance = 0.03, Multiplier = 20 } },
+	["Lollipop Cat"] = { Name = "Sugar Rush", ComboWindow = 0.3 },
+	["Cupcake Unicorn"] = { Name = "Sweet Luck", EggLuck = 0.25 },
+	["Candy Dragon"] = { Name = "Candy Crush", Burst = { Every = 20, Multiplier = 8 } },
+	["Sugar Queen"] = { Name = "Royal Treasury", CoinBonus = 0.5 },
+	["Astro Dog"] = { Name = "Orbit", AutoPower = 0.4 },
+	["Nebula Fox"] = { Name = "Void Surge", Surge = { Chance = 0.05 } },
+	["Galaxy Dragon"] = { Name = "Supernova", Burst = { Every = 30, Multiplier = 15 } },
+	["Cosmic Overlord"] = { Name = "Singularity", ComboBonus = 0.5, Burst = { Every = 100, Multiplier = 25 } },
+}
+
+local PASSIVES = { "CritChance", "CritDamage", "AutoPower", "EggLuck", "ComboWindow", "ComboBonus", "CoinBonus" }
+
+-- "Overcharge: every 30 clicks, next click x10" (nil if the pet has no ability).
+function GameConfig.DescribePetAbility(petName, golden)
+	local a = GameConfig.PetAbilities[petName]
+	if not a then
+		return nil
+	end
+	local k = if golden then GameConfig.GoldenAbilityScale else 1
+	local parts = {}
+	if a.Burst then table.insert(parts, "every " .. a.Burst.Every .. " clicks, next click x" .. a.Burst.Multiplier) end
+	if a.Proc then table.insert(parts, math.floor(a.Proc.Chance * 100 + 0.5) .. "% chance a click deals x" .. a.Proc.Multiplier) end
+	if a.Surge then table.insert(parts, math.floor(a.Surge.Chance * 100 + 0.5) .. "% chance to fill the combo to OVERDRIVE") end
+	if a.CritChance then table.insert(parts, "+" .. string.format("%g", a.CritChance * k * 100) .. "% crit chance") end
+	if a.CritDamage then table.insert(parts, "+" .. string.format("%g", a.CritDamage * k) .. "x crit damage") end
+	if a.AutoPower then table.insert(parts, "+" .. math.floor(a.AutoPower * k * 100 + 0.5) .. "% auto income") end
+	if a.EggLuck then table.insert(parts, "+" .. math.floor(a.EggLuck * k * 100 + 0.5) .. "% egg luck") end
+	if a.ComboWindow then table.insert(parts, "+" .. string.format("%g", a.ComboWindow * k) .. "s combo window") end
+	if a.ComboBonus then table.insert(parts, "+" .. math.floor(a.ComboBonus * k * 100 + 0.5) .. "% combo bonus") end
+	if a.CoinBonus then table.insert(parts, "+" .. math.floor(a.CoinBonus * k * 100 + 0.5) .. "% Coins from selling & bosses") end
+	return a.Name .. ": " .. table.concat(parts, ", ")
+end
+
+-- Summed abilities of the equipped pets.
+function GameConfig.GetPetAbilityStats(equippedPets)
+	local total = { Bursts = {}, Procs = {}, Surges = {} }
+	for _, stat in ipairs(PASSIVES) do total[stat] = 0 end
+	for _, pet in ipairs(equippedPets or {}) do
+		local a = GameConfig.PetAbilities[pet.Name]
+		if a then
+			local k = if pet.Golden then GameConfig.GoldenAbilityScale else 1
+			for _, stat in ipairs(PASSIVES) do
+				if a[stat] then total[stat] += a[stat] * k end
+			end
+			local name = string.upper(a.Name)
+			if a.Burst then table.insert(total.Bursts, { Every = a.Burst.Every, Multiplier = a.Burst.Multiplier, Name = name }) end
+			if a.Proc then table.insert(total.Procs, { Chance = a.Proc.Chance, Multiplier = a.Proc.Multiplier, Name = name }) end
+			if a.Surge then table.insert(total.Surges, { Chance = a.Surge.Chance, Name = name }) end
+		end
+	end
+	return total
+end
+
+-- Gear + pet-ability bonuses in one table; this is what the stat formulas take as `bonus`.
+function GameConfig.GetBonusStats(data, equippedPets)
+	local gear = GameConfig.GetGearStats(data)
+	local pets = GameConfig.GetPetAbilityStats(equippedPets)
+	local bonus = { Bursts = {}, Procs = pets.Procs, Surges = pets.Surges, ClickPower = gear.ClickPower }
+	for _, stat in ipairs(PASSIVES) do
+		bonus[stat] = (gear[stat] or 0) + pets[stat]
+	end
+	for _, b in ipairs(gear.Bursts) do table.insert(bonus.Bursts, b) end
+	for _, b in ipairs(pets.Bursts) do table.insert(bonus.Bursts, b) end
+	return bonus
+end
+
 -- Works for both Upgrades and AutoClickers since they share BaseCost/CostMultiplier.
 function GameConfig.GetCost(item, currentLevel)
 	return math.floor(item.BaseCost * (item.CostMultiplier ^ currentLevel))
@@ -692,7 +781,8 @@ function GameConfig.GetClickPower(data, equippedPets)
 		* GameConfig.GetBoostMultiplier(data, "Power")
 end
 
--- Power per second from auto-clickers: base x pets x Ascension x Auto Power x gear x 2x Power boost.
+-- Power per second from auto-clickers: base x pets x Ascension x Auto Power x gear x pet abilities
+-- x 2x Power boost.
 function GameConfig.GetAutoIncome(data, equippedPets)
 	local perSecond = 0
 	for _, auto in ipairs(GameConfig.AutoClickers) do
@@ -702,6 +792,7 @@ function GameConfig.GetAutoIncome(data, equippedPets)
 		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
 		* (1 + 0.2 * GameConfig.GetSkillLevel(data.Skills, "AutoPower"))
 		* (1 + GameConfig.GetGearStats(data).AutoPower)
+		* (1 + GameConfig.GetPetAbilityStats(equippedPets).AutoPower)
 		* GameConfig.GetBoostMultiplier(data, "Power")
 end
 
