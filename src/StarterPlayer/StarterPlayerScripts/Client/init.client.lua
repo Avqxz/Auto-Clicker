@@ -1050,11 +1050,22 @@ pickButton.Parent = starterPetFrame
 
 Instance.new("UICorner", pickButton).CornerRadius = UDim.new(0, 10)
 
+local starterCards = {} -- [name] = { Card, Scale, Check }
+
+-- Highlights the chosen card (gold border, lighter background, pop, check badge) and names the pet
+-- on the Pick button; every other card goes back to normal.
 local function selectStarterPet(petName)
 	selectedStarterPet = petName
 	for name, stroke in pairs(starterCardStrokes) do
-		stroke.Transparency = if name == petName then 0 else 1
+		local chosen = name == petName
+		local card = starterCards[name]
+		stroke.Transparency = if chosen then 0 else 1
+		card.Card.BackgroundColor3 = if chosen then Color3.fromRGB(62, 58, 40) else Color3.fromRGB(35, 35, 48)
+		card.Check.Visible = chosen
+		TweenService:Create(card.Scale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			{ Scale = if chosen then 1.05 else 1 }):Play()
 	end
+	pickButton.Text = "Pick " .. petName .. "!"
 end
 
 for _, starter in ipairs(GameConfig.StarterPets) do
@@ -1068,12 +1079,32 @@ for _, starter in ipairs(GameConfig.StarterPets) do
 
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
 
+	-- Border mode matters: on a text object a UIStroke outlines the text by default, and these cards
+	-- have no text, so the highlight never showed.
 	local cardStroke = Instance.new("UIStroke")
-	cardStroke.Thickness = 3
-	cardStroke.Color = Color3.fromRGB(60, 170, 100)
+	cardStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	cardStroke.Thickness = 5
+	cardStroke.Color = Color3.fromRGB(255, 210, 60)
 	cardStroke.Transparency = 1
 	cardStroke.Parent = card
 	starterCardStrokes[starter.Name] = cardStroke
+	local cardScale = Instance.new("UIScale", card)
+
+	local check = Instance.new("TextLabel") -- ✓ badge on the chosen card
+	check.Name = "Check"
+	check.AnchorPoint = Vector2.new(0.5, 0.5)
+	check.Position = UDim2.new(1, -6, 0, 6)
+	check.Size = UDim2.fromOffset(30, 30)
+	check.BackgroundColor3 = Color3.fromRGB(255, 210, 60)
+	check.Font = Enum.Font.GothamBlack
+	check.TextScaled = true
+	check.TextColor3 = Color3.fromRGB(40, 30, 10)
+	check.Text = "✓"
+	check.Visible = false
+	check.ZIndex = 3
+	check.Parent = card
+	Instance.new("UICorner", check).CornerRadius = UDim.new(1, 0)
+	starterCards[starter.Name] = { Card = card, Scale = cardScale, Check = check }
 
 	local viewport = createPetViewport({ Name = starter.Name, Rarity = starter.Rarity, Golden = false })
 	viewport.Size = UDim2.new(1, -16, 0, 110)
