@@ -316,6 +316,28 @@ local petsFrame, petsScroll = createPanel("PetsFrame", "Pets")
 
 local panels = { shopFrame, eggsFrame, petsFrame }
 
+-- ViewportFrames built before their panel is first shown (e.g. pet icons made on join) can render
+-- black; re-attaching the WorldModel when the panel opens makes Roblox draw them.
+local function refreshViewports(root)
+	for _, viewport in ipairs(root:GetDescendants()) do
+		if viewport:IsA("ViewportFrame") then
+			local world = viewport:FindFirstChildOfClass("WorldModel")
+			if world then
+				world.Parent = nil
+				world.Parent = viewport
+			end
+		end
+	end
+end
+local function refreshViewportsOnOpen(panel)
+	panel:GetPropertyChangedSignal("Visible"):Connect(function()
+		if panel.Visible then
+			task.defer(refreshViewports, panel)
+		end
+	end)
+end
+refreshViewportsOnOpen(petsFrame)
+
 -- Toggling a tab shows its panel and hides the others; clicking the active tab again hides it.
 local function bindTab(button, panel)
 	button.MouseButton1Click:Connect(function()
@@ -893,7 +915,7 @@ local revealWorldModel = Instance.new("WorldModel")
 revealWorldModel.Parent = revealViewport
 
 local revealCamera = Instance.new("Camera")
-revealCamera.CFrame = CFrame.new(Vector3.new(0, 0.9, 3.4), Vector3.new(0, 0.4, 0))
+revealCamera.CFrame = CFrame.new(Vector3.new(0, 1.2, 5.2), Vector3.new(0, 0.7, 0)) -- fits the cube pets as they spin
 revealCamera.Parent = revealViewport
 revealViewport.CurrentCamera = revealCamera
 
@@ -976,6 +998,7 @@ starterPetFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
 starterPetFrame.Visible = false
 starterPetFrame.ZIndex = 20 -- above the HUD (CLICK button, goal banner, combo meter) so Pick! stays clickable
 starterPetFrame.Parent = screenGui
+refreshViewportsOnOpen(starterPetFrame)
 
 Instance.new("UICorner", starterPetFrame).CornerRadius = UDim.new(0, 16)
 
@@ -1422,4 +1445,6 @@ require(script.StoreUI).Build({
  dataRemote=DataUpdatedRemote,
  clickRemote=ClickRemote,
 })
+-- Joyful, calm background music (shuffled, cross-faded) with a 🎵 mute button.
+require(script.MusicPlayer).Start({ screenGui=screenGui, styleButton=styleButton })
 resizeHUD() -- size the panels created above

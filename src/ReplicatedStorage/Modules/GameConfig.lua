@@ -847,4 +847,19 @@ GameConfig.HatchCooldown = 0.8
 GameConfig.AutosaveSeconds = 60
 GameConfig.LeaderboardRefreshSeconds = 120
 GameConfig.Sounds = {Click="rbxassetid://88442833509532", Purchase="rbxassetid://139719503904449", Rare="rbxassetid://1839881844"}
+
+-- Background music: joyful, calm tracks from Roblox's licensed APM music library (usable in any
+-- experience). Played client-side in a shuffled loop with cross-fades; players can mute it with the
+-- music button.
+GameConfig.Music = {
+	Volume = 0.3,
+	FadeSeconds = 2,
+	Tracks = {
+		{ Id = 1842663547, Name = "Feeling Glad" }, -- light, happy mandolin folk
+		{ Id = 1839843882, Name = "A Welcome Smile" }, -- carefree acoustic guitar
+		{ Id = 1836356540, Name = "Ukelele Maiden" }, -- easygoing ukulele
+		{ Id = 1841004403, Name = "Feels Easy" },
+		{ Id = 1842285702, Name = "On the Go" }, -- light-hearted easy listening
+	},
+}
 return GameConfig

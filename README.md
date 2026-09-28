@@ -25,11 +25,12 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Quests** — 3 daily and 3 weekly quests (clicks, hatches, bosses, combos, Ascensions, upgrades, Legendary hatches) paying Gems; the same set for everyone each UTC day/week. QUESTS/DAILY buttons show a red dot when something can be claimed.
 - **Offline earnings** — auto-clickers keep earning 5% of their rate while you're away (8h max, more with the Offline Earnings skill), shown in a Welcome Back panel.
 - **UI polish** — clean mobile style (thin soft outlines, subtle gradients), the world blurs behind open menus, panels pop in, Power/Coins/Gems counters roll to new values, buttons light up on hover and dim on press, and Legendary/Mythic moments shake the camera (all motion respects the FX LOW toggle).
+- **Background music** — joyful, calm tracks from Roblox's licensed APM library (Feeling Glad, A Welcome Smile, Ukelele Maiden, Feels Easy, On the Go) in a shuffled, cross-faded loop; the round 🎵 button mutes it (separate from the SOUND effects toggle). Tracks and volume are in `GameConfig.Music`.
 - **Leaderboard** — Power and Ascensions show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
 - **Five linked biome zones** — Forest (spawn, clickable orb, Rebirth shrine, Basic Egg), Ice World, Lava World, Candy World and Space World, laid out in a line and connected by walkways. Each walkway ends in a gate that needs 1 / 2 / 3 / 5 rebirths; gates are opened per player on the client, so each player only passes the ones they've unlocked. Every zone has its own egg, which must be hatched in person. The map is flattened to a smooth cartoon SmoothPlastic look. Forest/Ice/Lava come from JTea's free simulator pack and Candy/Space from free Creator Store maps — see [ASSETS.md](ASSETS.md). The in-world orb/eggs/altar are also directly clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
-- **3D pet models** — a simple procedural "critter" model (`PetModelFactory.lua`) represents every pet: it's used for the pets that visibly orbit your character when equipped (seen by every player, not just you), for the icons in the Pets inventory list, and for the spinning model in the hatch-reveal popup. Golden pets get a neon look and sparkle particles.
+- **Cube pets** — every pet is a cartoon cube critter built in code (`PetModelFactory.lua`): big blocky head, cube feet, a cute face (big eyes with highlights, smile, blush) and species parts — cat, dog, bunny, fox, bear, dragon (wings, horns), bird, unicorn, golem, alien — in its own colors. Legendary/Mythic accents glow, Mythic and Golden pets sparkle, and Golden pets turn gold. The same models orbit players, show as panel icons and spin in the hatch reveal.
 
 - **Store (gamepasses & developer products)** — Auto Click (AUTO toggle), Triple Hatch (x3 button), +3 Pet Equip, Lucky (x1.5 egg luck), Fast Hatch (half cooldown) and VIP (+10% Power and Coins, [VIP] chat tag, +5 Gems per daily reward, sparkle aura); plus 2x Power / 2x Luck (15 min), Instant Boss Retry and a 25-Token pack. All convenience; nothing is required to progress. **IDs start at 0 (hidden from players)** — see "Setting up monetization" below.
 
@@ -63,7 +64,7 @@ Roblox games in a text editor / git repo and sync them into Roblox Studio.
 default.project.json                                  # Rojo project definition
 src/
   ReplicatedStorage/Modules/GameConfig.lua             # Shared config: upgrades, auto-clickers, eggs/pets, rebirth math
-  ReplicatedStorage/Modules/PetModelFactory.lua        # Builds the procedural pet "critter" model (server + client)
+  ReplicatedStorage/Modules/PetModelFactory.lua        # Builds the cartoon cube pet models (server + client)
   ServerScriptService/Server/init.server.lua           # Server bootstrap: remotes, click/purchase/hatch/equip/fuse/rebirth handling, autosave
   ServerScriptService/Server/PlayerData.lua             # DataStore load/save/cache module
   ServerScriptService/Server/MapBuilder.lua             # Builds the five biome zones, walkways, rebirth gates, lighting and interactives
@@ -81,6 +82,7 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/EconomyUI.lua    # Coins counter, SELL button, boost timers and Token Shop
   StarterPlayer/StarterPlayerScripts/Client/UIPolish.lua     # Menu blur, panel pop-in and camera shake
   StarterPlayer/StarterPlayerScripts/Client/Counter.lua      # Animated number labels
+  StarterPlayer/StarterPlayerScripts/Client/MusicPlayer.lua  # Background music playlist and 🎵 mute button
   StarterPlayer/StarterPlayerScripts/Client/StoreUI.lua      # Shopping-cart STORE button + panel, AUTO click toggle, [VIP] chat tag
 ```
 

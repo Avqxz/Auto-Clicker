@@ -22,6 +22,14 @@
           "$path": "src/StarterPlayer/StarterPlayerScripts/Client"
         }
       }
+    },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "MonzterPack": {
+        "$path": {
+          "optional": "assets/monzter-pack"
+        }
+      }
     }
   }
 }
