@@ -40,7 +40,7 @@ local UnequipPetRemote = createRemoteEvent("UnequipPet")
 local FusePetsRemote = createRemoteEvent("FusePets")
 local EggResultRemote = createRemoteEvent("EggResult")
 local EggLockedRemote = createRemoteEvent("EggLocked")
-local PurchaseJumpRemote = createRemoteEvent("PurchaseJump")
+local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
 local PickStarterPetRemote = createRemoteEvent("PickStarterPet")
 
 local FeedbackRemote=createRemoteEvent("Feedback")
@@ -219,27 +219,6 @@ PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId)
 	pushData(player)
 end)
 
-PurchaseJumpRemote.OnServerEvent:Connect(function(player)
-	if not allow(player, "purchase", 0.12) then return end
-	local data = PlayerData.Get(player)
-	if not data then
-		return
-	end
-
-	local level = data.JumpLevel or 0
-	local cost = GameConfig.ExtraJump.Costs[level + 1]
-	if not cost or data.Coins < cost then
-		return
-	end
-
-	data.Coins -= cost
-	data.JumpLevel = level + 1
-	FeedbackRemote:FireClient(player, "Purchase", "Extra jump! You can now jump " .. GameConfig.GetMaxJumps(data.JumpLevel) .. " times")
-
-	updateLeaderstats(player)
-	pushData(player)
-end)
-
 -- ===== Pets & eggs =====
 
 local function handleHatchEgg(player, eggId)
@@ -255,13 +234,13 @@ local function handleHatchEgg(player, eggId)
 		return
 	end
 
-	-- Island eggs must be hatched in person, so the jumps needed to reach them matter.
-	if egg.Zone ~= "Lobby" then
+	-- Eggs outside the starting zone must be hatched in person, behind that zone's rebirth gate.
+	if egg.Zone ~= GameConfig.Zones[1].Id then
 		local eggPart = mapRefs.EggParts[egg.Id]
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		if not eggPart or not root or (root.Position - eggPart.Position).Magnitude > GameConfig.IslandHatchRange then
-			local island = findById(GameConfig.Islands, egg.Zone)
-			FeedbackRemote:FireClient(player, "Info", "Jump up to " .. (island and island.Name or egg.Zone) .. " to hatch the " .. egg.Name .. "!")
+		if not eggPart or not root or (root.Position - eggPart.Position).Magnitude > GameConfig.EggHatchRange then
+			local zone = findById(GameConfig.Zones, egg.Zone)
+			FeedbackRemote:FireClient(player, "Info", "Go to " .. (zone and zone.Name or egg.Zone) .. " to hatch the " .. egg.Name .. "!")
 			return
 		end
 	end
@@ -493,6 +472,29 @@ for eggId, eggPart in pairs(mapRefs.EggParts) do
 		handleHatchEgg(player, eggId)
 	end)
 end
+
+-- ===== Zone gates =====
+-- Gates are solid on the server and opened per player on the client (Client/ZoneGates.lua), so a
+-- player below the requirement just bumps into it; tell them what they need.
+
+local gateToastCooldown = {}
+for _, gate in ipairs(mapRefs.Gates) do
+	gate.Touched:Connect(function(hit)
+		local player = Players:GetPlayerFromCharacter(hit.Parent)
+		local data = player and PlayerData.Get(player)
+		if not data or data.RebirthCount >= gate:GetAttribute("RequiredRebirths") then
+			return
+		end
+		if gateToastCooldown[player.UserId] and os.clock() - gateToastCooldown[player.UserId] < 2 then
+			return
+		end
+		gateToastCooldown[player.UserId] = os.clock()
+		ZoneLockedRemote:FireClient(player, gate:GetAttribute("ZoneName"), gate:GetAttribute("RequiredRebirths"))
+	end)
+end
+Players.PlayerRemoving:Connect(function(player)
+	gateToastCooldown[player.UserId] = nil
+end)
 
 -- ===== Passive income (auto-clickers) =====
 

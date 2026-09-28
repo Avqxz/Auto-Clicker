@@ -25,7 +25,7 @@ local UnequipPetRemote = Remotes:WaitForChild("UnequipPet")
 local FusePetsRemote = Remotes:WaitForChild("FusePets")
 local EggResultRemote = Remotes:WaitForChild("EggResult")
 local EggLockedRemote = Remotes:WaitForChild("EggLocked")
-local PurchaseJumpRemote = Remotes:WaitForChild("PurchaseJump")
+local ZoneLockedRemote = Remotes:WaitForChild("ZoneLocked")
 local PickStarterPetRemote = Remotes:WaitForChild("PickStarterPet")
 
 local currentData = {
@@ -37,7 +37,6 @@ local currentData = {
 	Pets = {},
 	EquippedPetUids = {},
 	HasPickedStarterPet = true, -- assume true until the server says otherwise, so the modal doesn't flash on load
-	JumpLevel = 0,
 }
 
 -- ===== Helpers =====
@@ -384,8 +383,6 @@ local function createShopEntry(item, kind, layoutOrder)
 	buyButton.MouseButton1Click:Connect(function()
 		if kind == "upgrade" then
 			PurchaseUpgradeRemote:FireServer(item.Id)
-		elseif kind == "jump" then
-			PurchaseJumpRemote:FireServer()
 		else
 			PurchaseAutoClickerRemote:FireServer(item.Id)
 		end
@@ -401,7 +398,6 @@ end
 
 do
 	local order = 0
-	createShopEntry(GameConfig.ExtraJump, "jump", order)
 	for _, upgrade in ipairs(GameConfig.Upgrades) do
 		order += 1
 		createShopEntry(upgrade, "upgrade", order)
@@ -414,16 +410,6 @@ end
 
 local function refreshShop()
 	for id, entry in pairs(shopEntries) do
-		if entry.Kind == "jump" then
-			local level = currentData.JumpLevel or 0
-			local cost = GameConfig.ExtraJump.Costs[level + 1]
-			entry.LevelLabel.Text = "Jumps: " .. GameConfig.GetMaxJumps(level)
-			entry.BuyButton.Text = if cost then formatNumber(cost) else "MAX"
-			entry.BuyButton.BackgroundColor3 = if cost and currentData.Coins >= cost
-				then Color3.fromRGB(88, 219, 132)
-				else Color3.fromRGB(152, 174, 184)
-			continue
-		end
 		local levels = if entry.Kind == "upgrade" then currentData.UpgradeLevels else currentData.AutoClickerLevels
 		local level = levels[id] or 0
 		local cost = GameConfig.GetCost(entry.Item, level)
@@ -1084,9 +1070,15 @@ EggLockedRemote.OnClientEvent:Connect(function(eggName, requiredRebirths)
 	))
 end)
 
-require(script.MultiJump).Start(function()
-	return GameConfig.GetMaxJumps(currentData.JumpLevel)
+ZoneLockedRemote.OnClientEvent:Connect(function(zoneName, requiredRebirths)
+	showToast(("Locked! Need %d Rebirth%s to enter %s"):format(
+		requiredRebirths,
+		requiredRebirths == 1 and "" or "s",
+		zoneName
+	))
 end)
+
+task.spawn(require(script.ZoneGates).Start)
 
 refreshUI()
 

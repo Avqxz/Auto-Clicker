@@ -117,38 +117,20 @@ GameConfig.Rebirth = {
 	MultiplierPerRebirth = 1, -- +50% coin gain per rebirth
 }
 
--- ===== Sky islands & jumping =====
--- Islands float above the lobby; each sits just below the height reachable
--- with RequiredJumps total jumps (1 ground jump + mid-air jumps). Extra
--- jumps are bought in the shop and are permanent (not reset by rebirth).
+-- ===== Zones =====
+-- Biome zones laid out in a line and linked by walkways. Each walkway ends in
+-- a gate that stays solid for players below the zone's RequiredRebirths.
+-- Zone eggs can only be hatched while standing near them (EggHatchRange).
 
-GameConfig.ExtraJump = {
-	Id = "ExtraJump",
-	Name = "Extra Jump",
-	Description = "+1 mid-air jump to reach higher islands",
-	Costs = { 750, 30000, 600000, 8000000 }, -- one entry per purchasable level
-	AirJumpVelocity = 70, -- studs/s of upward velocity per mid-air jump
+GameConfig.Zones = {
+	{ Id = "Forest", Name = "Forest", RequiredRebirths = 0 },
+	{ Id = "Ice", Name = "Ice World", RequiredRebirths = 1 },
+	{ Id = "Lava", Name = "Lava World", RequiredRebirths = 2 },
+	{ Id = "Candy", Name = "Candy World", RequiredRebirths = 3 },
+	{ Id = "Space", Name = "Space World", RequiredRebirths = 5 },
 }
 
-GameConfig.Islands = {
-	{ Id = "Ice", Name = "Ice Island", RequiredJumps = 2 },
-	{ Id = "Lava", Name = "Lava Island", RequiredJumps = 3 },
-	{ Id = "Candy", Name = "Candy Island", RequiredJumps = 4 },
-	{ Id = "Space", Name = "Space Island", RequiredJumps = 5 },
-}
-
--- Studs a character can rise with `totalJumps` jumps, chaining each at its apex.
-function GameConfig.GetJumpReach(totalJumps)
-	local groundJump = 7.2 -- Roblox default character jump height
-	local airJump = GameConfig.ExtraJump.AirJumpVelocity ^ 2 / (2 * workspace.Gravity)
-	return groundJump + math.max(0, totalJumps - 1) * airJump
-end
-
-GameConfig.IslandHatchRange = 40 -- studs; island eggs can only be hatched while standing near them
-
-function GameConfig.GetMaxJumps(jumpLevel)
-	return 1 + math.min(jumpLevel or 0, #GameConfig.ExtraJump.Costs)
-end
+GameConfig.EggHatchRange = 40 -- studs; eggs outside the starting zone must be hatched in person
 
 -- ===== Pets & eggs =====
 
@@ -171,7 +153,7 @@ GameConfig.Eggs = {
 		Name = "Basic Egg",
 		Cost = 60,
 		RequiredRebirths = 0,
-		Zone = "Lobby",
+		Zone = "Forest",
 		Pets = {
 			{ Name = "Puppy", Rarity = "Common", Weight = 50, Multiplier = 1.1 },
 			{ Name = "Kitten", Rarity = "Common", Weight = 50, Multiplier = 1.15 },

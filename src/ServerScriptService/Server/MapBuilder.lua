@@ -1,15 +1,23 @@
--- JTea's free simulator pack supplies the lobby map and shops. Sky islands (reached with extra
--- jumps, Clicker Simulator style) are built from smooth cartoon primitives.
+-- Builds the world: biome zones in a line along -Z, linked by walkways, each walkway ending in a
+-- rebirth gate. Forest/Ice/Lava come from JTea's free simulator pack; Candy/Space are free
+-- Creator Store maps saved in ServerStorage.ZoneMaps (see ASSETS.md).
 local Config=require(game.ReplicatedStorage.Modules.GameConfig)
 local MapBuilder={}
 local V=Vector3.new local C=Color3.fromRGB
+local GAP=30 -- walkway length between one zone's outer edge and the next
+
+-- Where each zone's map comes from, which part/model is its floor, and its egg/gate color.
+local SOURCES={
+ Forest={pack=true,floor='Texture Part',color=C(92,233,236)},
+ Ice={pack=true,floor='Floor',color=C(120,200,255)},
+ Lava={pack=true,floor='Lava Ground',color=C(255,120,40)},
+ Candy={floor='Baseplate',color=C(255,120,200)},
+ Space={floor='Basic Floor',color=C(150,110,255)},
+}
+
 local function part(parent,name,size,pos,color,material)
  local p=Instance.new('Part') p.Name=name p.Size=size p.Position=pos p.Color=color
  p.Material=material or Enum.Material.SmoothPlastic p.Anchored=true p.TopSurface=Enum.SurfaceType.Smooth p.Parent=parent return p
-end
-local function cyl(parent,name,diameter,height,pos,color,material,rotation)
- local p=part(parent,name,V(height,diameter,diameter),pos,color,material) p.Shape=Enum.PartType.Cylinder
- p.CFrame=CFrame.new(pos)*(rotation or CFrame.Angles(0,0,math.pi/2)) return p -- default: axis vertical
 end
 local function label(p,text,maxDistance)
  local gui=Instance.new('BillboardGui') gui.Size=UDim2.fromOffset(210,56) gui.StudsOffset=V(0,5,0) gui.MaxDistance=maxDistance or 95 gui.Parent=p
@@ -27,87 +35,100 @@ local function place(template,parent,name,pos,height)
  end
  return m
 end
--- Island placement and palette; heights come from GameConfig.Islands[].RequiredJumps.
-local THEMES={
- Ice={pos=V(-58,0,-55),top=C(225,245,255),rock=C(150,190,225),egg=C(255,216,99)},
- Lava={pos=V(58,0,-55),top=C(96,74,80),rock=C(62,46,54),egg=C(255,120,40)},
- Candy={pos=V(-30,0,-105),top=C(255,176,214),rock=C(206,124,192),egg=C(255,120,200)},
- Space={pos=V(30,0,-105),top=C(96,70,170),rock=C(55,40,105),egg=C(150,110,255)},
-}
-local function decorate(m,id,c)
- local function ring(i,n,r) local a=(i/n)*math.pi*2 return c+V(math.cos(a)*r,0,math.sin(a)*r),a end
- if id=='Ice' then
-  for i=1,5 do local pos,a=ring(i,5,16) local h=6+i%3*2
-   local p=part(m,'Crystal',V(2,h,2),pos,C(170,225,255),Enum.Material.Glass) p.Transparency=0.15
-   p.CFrame=CFrame.new(pos+V(0,h/2-0.5,0))*CFrame.Angles(0.2,a,0.15)
-  end
- elseif id=='Lava' then
-  for i=1,3 do local pos=ring(i,3,14) cyl(m,'LavaPool',7,0.3,pos+V(0,0.15,0),C(255,110,30),Enum.Material.Neon) end
-  for i=1,3 do local pos=ring(i+0.5,3,15) local d=4+i
-   local r=part(m,'Boulder',V(d,d,d),pos+V(0,d/2-1,0),C(70,55,60)) r.Shape=Enum.PartType.Ball end
- elseif id=='Candy' then
-  local heads={C(255,90,150),C(120,200,255),C(255,220,90),C(160,120,255)}
-  for i=1,4 do local pos,a=ring(i,4,15)
-   cyl(m,'LollipopStick',0.8,7,pos+V(0,3.5,0),C(255,255,255))
-   cyl(m,'Lollipop',5,1,pos+V(0,8.5,0),heads[i],nil,CFrame.Angles(0,-a,0))
-  end
-  for i=1,3 do local pos=ring(i+0.5,3,11)
-   local g=part(m,'Gumdrop',V(3,3,3),pos+V(0,1,0),heads[i+1]) g.Shape=Enum.PartType.Ball end
- elseif id=='Space' then
-  for i=1,3 do local pos=ring(i,3,17) local d=3+i
-   local planet=part(m,'Planet',V(d,d,d),pos+V(0,9+i*2,0),C(120+i*40,90,255-i*40),Enum.Material.Neon)
-   planet.Shape=Enum.PartType.Ball planet.CanCollide=false
-   cyl(m,'PlanetRing',d*1.8,0.2,planet.Position,C(230,220,255),nil,CFrame.Angles(0,0,math.pi/2)*CFrame.Angles(0.35,0,0)).CanCollide=false
-  end
-  for i=1,8 do local pos=ring(i,8,20)
-   local star=part(m,'Star',V(0.8,0.8,0.8),pos+V(0,6+(i%4)*3,0),C(255,245,180),Enum.Material.Neon)
-   star.Shape=Enum.PartType.Ball star.CanCollide=false
+local function bounds(x)
+ if x:IsA('Model') then return x:GetBoundingBox() end
+ return x.CFrame,x.Size
+end
+local function short(n)
+ for _,u in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=u[1] then return (string.format('%.1f',n/u[1]):gsub('%.0$',''))..u[2] end end
+ return tostring(n)
+end
+
+-- Removes zone scenery that rises above the floor inside `size` around `cf` (walkway corridors,
+-- egg spots). Whole small models (a tree, a rock) go at once; big ones only lose the parts in the way.
+local function clearBox(zoneModels,cf,size)
+ local params=OverlapParams.new() params.FilterType=Enum.RaycastFilterType.Include params.FilterDescendantsInstances=zoneModels
+ for _,p in ipairs(workspace:GetPartBoundsInBox(cf,size,params)) do
+  if p.Parent and p.Position.Y+p.Size.Y/2>2 and not p:GetAttribute('ZoneFloor') then
+   local zone,target=nil,p
+   for _,z in ipairs(zoneModels) do if p:IsDescendantOf(z) then zone=z end end
+   local a=p.Parent
+   while zone and a and a~=zone do
+    if a:IsA('Model') then local _,s=a:GetBoundingBox() if math.max(s.X,s.Z)<60 then target=a end end
+    a=a.Parent
+   end
+   target:Destroy()
   end
  end
 end
-local function buildIsland(parent,island)
- local theme=THEMES[island.Id]
- local topY=1+Config.GetJumpReach(island.RequiredJumps)-3 -- a little under the max reach
- local c=V(theme.pos.X,topY,theme.pos.Z)
- local m=Instance.new('Model') m.Name=island.Id..'Island' m.Parent=parent
- cyl(m,'Top',44,4,c-V(0,2,0),theme.top)
- for i,d in ipairs({34,24,12}) do cyl(m,'Underside',d,3,c-V(0,4+(i-0.5)*3,0),theme.rock) end -- tiered floating-rock base
- decorate(m,island.Id,c)
- local sign=part(m,'Sign',V(1,1,1),c+V(0,12,0),C(255,255,255)) sign.Transparency=1 sign.CanCollide=false sign.CanQuery=false
- label(sign,string.upper(island.Name)..'\n'..island.RequiredJumps..' jumps',260)
- return c
+
+-- Clones a zone map, sets its floor top to y=1 centered on x=0, and returns it with its floor bounds.
+local function loadZone(library,zoneMaps,zone,parent)
+ local src=SOURCES[zone.Id]
+ local template
+ if src.pack then template=library[zone.Id].Map:GetChildren()[1]
+ else template=assert(zoneMaps and zoneMaps:FindFirstChild(zone.Id),'Missing ServerStorage.ZoneMaps.'..zone.Id..' (see ASSETS.md)') end
+ local m=template:Clone() m.Name=zone.Id m.Parent=parent
+ for _,d in ipairs(m:GetDescendants()) do
+  if d:IsA('LuaSourceContainer') or d:IsA('SpawnLocation') then d:Destroy()
+  elseif d:IsA('BasePart') then d.Anchored=true end
+ end
+ local floor
+ for _,d in ipairs(m:GetDescendants()) do
+  if d.Name==src.floor and (d:IsA('BasePart') or d:IsA('Model')) then
+   local cf,s=bounds(d) if not floor or cf.Position.Y<floor.cf.Position.Y then floor={inst=d,cf=cf,size=s} end
+  end
+ end
+ assert(floor,'No floor "'..src.floor..'" in zone '..zone.Id)
+ if floor.inst:IsA('BasePart') then floor.inst:SetAttribute('ZoneFloor',true) end
+ for _,d in ipairs(floor.inst:GetDescendants()) do if d:IsA('BasePart') then d:SetAttribute('ZoneFloor',true) end end
+ local top=floor.cf.Position.Y+floor.size.Y/2
+ m:PivotTo(m:GetPivot()+V(-floor.cf.Position.X,1-top,-floor.cf.Position.Z))
+ return m,floor.size
 end
+
 function MapBuilder.Build()
  local pack=game.ServerStorage:FindFirstChild('JTeaSimulatorPack')
  assert(pack,'Import the free JTea pack 7151365600 into ServerStorage as JTeaSimulatorPack (see ASSETS.md).')
  local library=pack:GetChildren()[1]:GetChildren()[1]
+ local zoneMaps=game.ServerStorage:FindFirstChild('ZoneMaps')
  local old=workspace:FindFirstChild('Map') if old then old:Destroy() end
- local preview=workspace:FindFirstChild('JTeaPreview') if preview then preview:Destroy() end
  local map=Instance.new('Folder') map.Name='Map' map.Parent=workspace
  local zones=Instance.new('Folder') zones.Name='Zones' zones.Parent=map
  local interactive=Instance.new('Folder') interactive.Name='Interactives' interactive.Parent=map
- local function biome(name,z,floorName)
-  local m=library[name].Map:GetChildren()[1]:Clone() m.Name=name m.Parent=zones
-  local floor=m:FindFirstChild(floorName)
-  assert(floor,'Pack floor missing for '..name)
-  local offset=V(-floor.Position.X,1-(floor.Position.Y+floor.Size.Y/2),z-floor.Position.Z)
-  m:PivotTo(m:GetPivot()+offset)
-  for _,d in ipairs(m:GetDescendants()) do
-   if d:IsA('BasePart') then d.Anchored=true end
-  end
-  return m
+ local gatesFolder=Instance.new('Folder') gatesFolder.Name='Gates' gatesFolder.Parent=map
+
+ -- Lay the zones out in a line: each zone's outer edge sits GAP studs past the previous one's.
+ local placed={} -- {zone, model, floorSize, center}
+ local prevMinZ
+ for i,zone in ipairs(Config.Zones) do
+  local m,floorSize=loadZone(library,zoneMaps,zone,zones)
+  local cf,size=m:GetBoundingBox()
+  local shift=0
+  if prevMinZ then shift=(prevMinZ-GAP)-(cf.Position.Z+size.Z/2) end
+  m:PivotTo(m:GetPivot()+V(0,0,shift))
+  prevMinZ=cf.Position.Z+shift-size.Z/2
+  placed[i]={zone=zone,model=m,floorSize=floorSize,center=V(0,1,shift)}
  end
- biome('Forest',0,'Texture Part')
- -- Clear terrain left by older builds (Terrain is always textured), then lay smooth cartoon ground:
- -- a flat slab just under floor height plus rounded domes along both sides to close in each zone.
- for _,zone in ipairs({{z=0,ground=C(112,214,92),hill=C(86,190,78)}}) do
-  workspace.Terrain:FillBlock(CFrame.new(0,-8,zone.z),V(280,24,280),Enum.Material.Air)
-  part(zones,'Ground',V(258,4,258),V(0,-1.5,zone.z),zone.ground)
-  for _,side in ipairs({-1,1}) do for i=1,5 do
-   local hill=part(zones,'Hill',V(30,30,30),V(side*122,-8,zone.z-95+i*36),zone.hill) hill.Shape=Enum.PartType.Ball
-  end end
+
+ -- Walkways between consecutive floors, with the scenery in their way cleared.
+ local walkways={}
+ for i=2,#placed do
+  local a,b=placed[i-1],placed[i]
+  local fromZ=a.center.Z-a.floorSize.Z/2 local toZ=b.center.Z+b.floorSize.Z/2
+  local midZ=(fromZ+toZ)/2 local length=fromZ-toZ
+  clearBox({a.model,b.model},CFrame.new(0,40,midZ),V(30,78,length+6))
+  walkways[i]={midZ=midZ,length=length,entranceZ=toZ}
  end
+
+ -- Forest (starting zone) extras: smooth ground under and around it, side hills, and props.
+ workspace.Terrain:FillBlock(CFrame.new(0,-8,0),V(280,24,280),Enum.Material.Air) -- clear terrain from older builds
+ part(zones,'Ground',V(258,4,258),V(0,-1.5,0),C(112,214,92))
+ for _,side in ipairs({-1,1}) do for i=1,5 do
+  local hill=part(zones,'Hill',V(30,30,30),V(side*122,-8,-95+i*36),C(86,190,78)) hill.Shape=Enum.PartType.Ball
+ end end
  require(script.Parent.AssetScenery).Build(map)
+
  -- Cartoon pass: flat SmoothPlastic with slightly punchier colors on everything but glowing/glass effects.
  for _,d in ipairs(map:GetDescendants()) do
   if d:IsA('BasePart') and d.Material~=Enum.Material.Neon and d.Material~=Enum.Material.Glass and d.Material~=Enum.Material.ForceField then
@@ -116,37 +137,65 @@ function MapBuilder.Build()
    if s>0.08 then d.Color=Color3.fromHSV(h,math.min(1,s*1.25),math.min(1,v*1.08)) end
   end
  end
+
+ -- Walkway decks and rebirth gates. Gates are solid on the server; each client makes the gates it
+ -- has unlocked non-solid for its own character (see Client/ZoneGates.lua).
+ local gates={}
+ for i=2,#placed do
+  local zone=placed[i].zone local w=walkways[i] local color=SOURCES[zone.Id].color
+  part(zones,'Walkway',V(24,2,w.length+4),V(0,0,w.midZ),C(240,226,204))
+  for _,side in ipairs({-1,1}) do part(zones,'WalkwayRail',V(1,2,w.length+4),V(side*12.5,2,w.midZ),C(255,255,255)) end
+  local gateZ=w.entranceZ+1.5
+  for _,side in ipairs({-1,1}) do part(gatesFolder,'GatePillar',V(4,22,4),V(side*14,12,gateZ),C(255,255,255)) end
+  part(gatesFolder,'GateTop',V(32,4,4),V(0,24,gateZ),color)
+  local gate=part(gatesFolder,zone.Id..'Gate',V(24,20,1.5),V(0,11,gateZ),color,Enum.Material.ForceField)
+  gate.Transparency=0.3 gate:SetAttribute('Zone',zone.Id) gate:SetAttribute('ZoneName',zone.Name)
+  gate:SetAttribute('RequiredRebirths',zone.RequiredRebirths)
+  local sign=part(gatesFolder,zone.Id..'GateSign',V(1,1,1),V(0,26,gateZ),color) sign.Transparency=1 sign.CanCollide=false sign.CanQuery=false
+  label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' rebirth'..(zone.RequiredRebirths==1 and '' or 's'),160)
+  table.insert(gates,gate)
+ end
+
  local templateSpawn=workspace:FindFirstChild('SpawnLocation') if templateSpawn then templateSpawn.Enabled=false end
  local spawn=Instance.new('SpawnLocation') spawn.Name='MainSpawn' spawn.Size=V(10,0.5,10)
  spawn.Position=V(0,1.3,40) spawn.Transparency=1 spawn.Anchored=true spawn.Neutral=true spawn.Duration=0 spawn.Parent=map
  local function pad(name,pos,color)
-  local p=part(interactive,name,V(10,0.6,10),pos,color,Enum.Material.Neon) return p
+  return part(interactive,name,V(10,0.6,10),pos,color,Enum.Material.Neon)
  end
  pad('SpawnRing',V(0,1.2,40),C(68,219,238))
  local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,5,10),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
  label(orb,'CLICK TO EARN')
  local altar=pad('RebirthAltar',V(49,1.5,0),C(177,104,240)) label(altar,'REBIRTH\nPermanent power')
  place(library.Forest['Extra Portal']:GetChildren()[1],zones,'RebirthShrine',V(49,1,0),18)
- local islandCenters={}
- for _,island in ipairs(Config.Islands) do islandCenters[island.Id]=buildIsland(zones,island) end
- local iceShop=library:FindFirstChild('Ice') and library.Ice:FindFirstChild('Shop')
- if iceShop and islandCenters.Ice then place(iceShop:GetChildren()[1],zones,'IceShop',islandCenters.Ice+V(0,0,-12),12) end
+
+ -- Egg stands: one glass capsule from the pack per egg (Candy/Space reuse the Forest capsule),
+ -- its egg recolored per zone, with an invisible clickable hitbox around it. The starting egg keeps
+ -- its lobby spot; the others stand just inside their zone's entrance.
+ local function capsule(zoneId)
+  local zone=library:FindFirstChild(zoneId) or library.Forest
+  local best,bestSize
+  for _,m in ipairs(zone.Shop:GetChildren()[1]:GetChildren()) do
+   if m:IsA('Model') and m:FindFirstChild('Egg',true) then -- capsules hold an Egg part; the flat pads don't
+    local _,sz=m:GetBoundingBox() if not bestSize or sz.Magnitude>bestSize then best,bestSize=m,sz.Magnitude end
+   end
+  end
+  return best
+ end
+ local byZone={} for _,p in ipairs(placed) do byZone[p.zone.Id]=p end
  local eggs={}
  for _,egg in ipairs(Config.Eggs) do
-  local p
-  if egg.Zone=='Lobby' then
-   local pos=V(-42,1,-3)
-   place(library.Forest.Shop:GetChildren()[1],zones,egg.Id..'Shop',pos,16)
-   p=part(interactive,egg.Id,V(4.5,6,4.5),pos+V(0,4.5,5),C(92,233,236),Enum.Material.Neon)
-  else
-   local c=assert(islandCenters[egg.Zone],'No island for egg zone '..egg.Zone)
-   cyl(interactive,egg.Id..'Pedestal',8,1.5,c+V(0,0.75,0),C(245,245,255))
-   p=part(interactive,egg.Id,V(4.5,6,4.5),c+V(0,4.5,0),THEMES[egg.Zone].egg,Enum.Material.Neon)
-  end
-  p.Shape=Enum.PartType.Ball p:SetAttribute('Zone',egg.Zone)
-  label(p,egg.Name..'\n'..egg.Cost..' coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' rebirths' or ''))
+  local z=assert(byZone[egg.Zone],'No zone for egg '..egg.Id)
+  local pos=z==placed[1] and V(-42,1,-3) or V(-30,1,z.center.Z+z.floorSize.Z/2-45)
+  if z~=placed[1] then clearBox({z.model},CFrame.new(pos+V(0,20,0)),V(16,38,16)) end
+  local m=place(capsule(egg.Zone),zones,egg.Id..'Stand',pos,11)
+  for _,d in ipairs(m:GetDescendants()) do if d:IsA('BasePart') and d.Name=='Egg' then d.Color=SOURCES[egg.Zone].color end end
+  local cf,size=m:GetBoundingBox()
+  local p=part(interactive,egg.Id,size+V(1,1,1),cf.Position,SOURCES[egg.Zone].color) p.CFrame=cf
+  p.Transparency=1 p.CanCollide=false p:SetAttribute('Zone',egg.Zone)
+  label(p,egg.Name..'\n'..short(egg.Cost)..' coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' rebirths' or ''))
   eggs[egg.Id]=p
  end
+
  -- Bright, soft, non-reflective lighting for a cartoon look.
  local lighting=game:GetService('Lighting') lighting.ClockTime=14 lighting.Brightness=3
  lighting.Ambient=C(150,150,172) lighting.OutdoorAmbient=C(190,190,205) lighting.ShadowSoftness=0.6
@@ -157,6 +206,6 @@ function MapBuilder.Build()
  grade.Name='SimulatorGrade' grade.Saturation=0.2 grade.Contrast=0.08 grade.Brightness=0.02 grade.Parent=lighting
  local bloom=lighting:FindFirstChild('SimulatorBloom') or Instance.new('BloomEffect')
  bloom.Name='SimulatorBloom' bloom.Intensity=0.3 bloom.Size=20 bloom.Threshold=1.4 bloom.Parent=lighting
- return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs}
+ return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates}
 end
 return MapBuilder
