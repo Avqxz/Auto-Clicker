@@ -42,7 +42,9 @@ battle pass, limited-time events and an hourly global boss.
 1. In the [Creator Dashboard](https://create.roblox.com/dashboard/creations), open this experience →
    **Monetization → Passes** and create one pass per entry in `GameConfig.GamePasses`
    (Auto Click, Triple Hatch, +3 Pet Equip, Lucky, Fast Hatch, VIP). Give each a price and put it
-   **On Sale**.
+   **On Sale**. Ready-made 512×512 icons are in `assets/gamepass-icons/` (`AutoClick.png`,
+   `TripleHatch.png`, `PetSlots.png`, `Lucky.png`, `FastHatch.png`, `VIP.png`); their SVG sources and
+   generator (`make_icons.py`, rendered with headless Chrome) are alongside.
 2. Under **Monetization → Developer Products**, create one product per entry in
    `GameConfig.DevProducts` (2x Power, 2x Luck, Instant Boss Retry, Token Pack) with a price.
 3. Copy each numeric ID into the matching `Id = 0` in
