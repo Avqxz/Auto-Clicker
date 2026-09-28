@@ -2,6 +2,7 @@
 -- rebirth gate. Forest/Ice/Lava come from JTea's free simulator pack; Candy/Space are free
 -- Creator Store maps saved in ServerStorage.ZoneMaps (see ASSETS.md).
 local Config=require(game.ReplicatedStorage.Modules.GameConfig)
+local PetModelFactory=require(game.ReplicatedStorage.Modules.PetModelFactory)
 local MapBuilder={}
 local V=Vector3.new local C=Color3.fromRGB
 local GAP=30 -- walkway length between one zone's outer edge and the next
@@ -196,6 +197,36 @@ function MapBuilder.Build()
   eggs[egg.Id]=p
  end
 
+ -- Bosses: a giant critter at the far end of each zone, facing the entrance, with a Fight prompt.
+ -- Fights are per player and run on the server (see init.server.lua).
+ local bosses={}
+ for _,boss in ipairs(Config.Bosses) do
+  local z=byZone[boss.Zone]
+  if z then
+   local pos=V(30,1,z.center.Z-z.floorSize.Z/2+35)
+   clearBox({z.model},CFrame.new(pos+V(0,22,0)),V(34,44,34))
+   local color=SOURCES[boss.Zone].color
+   local arena=part(zones,boss.Id..'Arena',V(0.4,28,28),pos,color,Enum.Material.Neon) -- glowing ring under the boss
+   arena.Shape=Enum.PartType.Cylinder arena.CFrame=CFrame.new(pos+V(0,0.2,0))*CFrame.Angles(0,0,math.pi/2)
+   local m=PetModelFactory.Create({Name=boss.Name,Rarity=boss.Rarity},{WithEffects=false})
+   m.Name=boss.Id m:ScaleTo(10)
+   for _,d in ipairs(m:GetDescendants()) do
+    if d:IsA('BasePart') then
+     if d.Name:find('Eye') then d.Color=C(255,40,40) d.Material=Enum.Material.Neon else d.Color=color end
+    end
+   end
+   m.PrimaryPart.CanCollide=true
+   m:PivotTo(CFrame.new(pos)*CFrame.Angles(0,math.pi,0)) -- face +Z (the zone entrance)
+   local cf,size=m:GetBoundingBox()
+   m:PivotTo(m:GetPivot()+V(0,pos.Y+0.4-(cf.Position.Y-size.Y/2),0)) -- rest the model's lowest point on the arena ring
+   m.Parent=zones
+   label(m.Head,boss.Name..'\n❤ '..short(boss.Health)..' HP',140)
+   local prompt=Instance.new('ProximityPrompt') prompt.ActionText='Fight' prompt.ObjectText=boss.Name
+   prompt.HoldDuration=0 prompt.MaxActivationDistance=22 prompt.RequiresLineOfSight=false prompt.Parent=m.PrimaryPart
+   bosses[boss.Id]={Model=m,Prompt=prompt,Position=pos}
+  end
+ end
+
  -- Bright, soft, non-reflective lighting for a cartoon look.
  local lighting=game:GetService('Lighting') lighting.ClockTime=14 lighting.Brightness=3
  lighting.Ambient=C(150,150,172) lighting.OutdoorAmbient=C(190,190,205) lighting.ShadowSoftness=0.6
@@ -206,6 +237,6 @@ function MapBuilder.Build()
  grade.Name='SimulatorGrade' grade.Saturation=0.2 grade.Contrast=0.08 grade.Brightness=0.02 grade.Parent=lighting
  local bloom=lighting:FindFirstChild('SimulatorBloom') or Instance.new('BloomEffect')
  bloom.Name='SimulatorBloom' bloom.Intensity=0.3 bloom.Size=20 bloom.Threshold=1.4 bloom.Parent=lighting
- return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates}
+ return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses}
 end
 return MapBuilder

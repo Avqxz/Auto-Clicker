@@ -97,16 +97,24 @@ function ClickFeel.Start(deps)
 	-- (client-created BillboardGuis didn't render reliably), rising and fading over 0.8s.
 	local popups = {} -- { label, offset (studs), born }
 	local POP_LIFE = 0.8
-	local function popAbove(amount, crit)
+	-- mode "boss" = the click hit a boss; burstName = a gear burst triggered on this click.
+	local function popAbove(amount, crit, mode, burstName)
+		local big = crit or burstName ~= nil
 		local label = Instance.new("TextLabel")
 		label.AnchorPoint = Vector2.new(0.5, 0.5)
-		label.Size = UDim2.fromOffset(crit and 260 or 170, crit and 52 or 36)
+		label.Size = UDim2.fromOffset(big and 300 or 170, big and 52 or 36)
 		label.BackgroundTransparency = 1
 		label.Font = Enum.Font.FredokaOne
 		label.TextScaled = true
 		label.TextStrokeTransparency = 0.2
-		label.TextColor3 = if crit then Color3.fromRGB(255, 120, 50) else Color3.fromRGB(255, 225, 90)
-		label.Text = (if crit then "CRITICAL +" else "+") .. deps.formatNumber(amount) .. " ⚡"
+		label.TextColor3 = if burstName then Color3.fromRGB(190, 110, 255)
+			elseif crit then Color3.fromRGB(255, 120, 50)
+			elseif mode == "boss" then Color3.fromRGB(255, 90, 90)
+			else Color3.fromRGB(255, 225, 90)
+		local prefix = if burstName then burstName .. " " elseif crit then "CRITICAL " else ""
+		label.Text = if mode == "boss"
+			then prefix .. "-" .. deps.formatNumber(amount) .. " 💥"
+			else prefix .. "+" .. deps.formatNumber(amount) .. " ⚡"
 		label.ZIndex = 5
 		label.Position = UDim2.fromOffset(-500, -500) -- off-screen until the first frame positions it
 		label.Visible = false
@@ -137,8 +145,8 @@ function ClickFeel.Start(deps)
 		end
 	end)
 
-	deps.resultRemote.OnClientEvent:Connect(function(amount, crit, count)
-		popAbove(amount, crit)
+	deps.resultRemote.OnClientEvent:Connect(function(amount, crit, count, mode, burstName)
+		popAbove(amount, crit, mode, burstName)
 		comboCount, lastHit = count, os.clock()
 		local tier = GameConfig.GetComboTier(count)
 		comboFrame.Visible = count >= 2

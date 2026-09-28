@@ -37,6 +37,7 @@ local currentData = {
 	RebirthCount = 0, -- shown as Ascensions
 	Gems = 0,
 	Skills = {},
+	Gear = { Items = {}, Equipped = {} },
 	Pets = {},
 	EquippedPetUids = {},
 	HasPickedStarterPet = true, -- assume true until the server says otherwise, so the modal doesn't flash on load
@@ -209,7 +210,7 @@ local tabBar = Instance.new("Frame")
 tabBar.Name = "TabBar"
 tabBar.AnchorPoint = Vector2.new(0, 0.5)
 tabBar.Position = UDim2.new(0, 16, 0.5, -20)
-tabBar.Size = UDim2.new(0, 132, 0, 280)
+tabBar.Size = UDim2.new(0, 132, 0, 352)
 tabBar.BackgroundTransparency = 1
 tabBar.Parent = screenGui
 
@@ -335,6 +336,18 @@ local ascensionUI = require(script.AscensionUI).Build({
 Remotes:WaitForChild("OpenPanel").OnClientEvent:Connect(function(name)
 	ascensionUI.Open(name)
 end)
+
+-- GEAR tab: equipped slots and the gear bag (gear drops from bosses).
+local gearUI = require(script.GearUI).Build({
+	createPanel = createPanel,
+	createTabButton = createTabButton,
+	bindTab = bindTab,
+	panels = panels,
+	styleButton = styleButton,
+	equipRemote = Remotes:WaitForChild("EquipGear"),
+	unequipRemote = Remotes:WaitForChild("UnequipGear"),
+	discardRemote = Remotes:WaitForChild("DiscardGear"),
+})
 
 -- ===== Shop (upgrades + auto-clickers) =====
 
@@ -1033,6 +1046,7 @@ local function refreshUI()
 	refreshEggs()
 	refreshPets()
 	ascensionUI.Refresh(currentData)
+	gearUI.Refresh(currentData)
 end
 
 -- ===== Interactions =====
@@ -1169,7 +1183,7 @@ local function resizeHUD()
  end
  for item,scale in pairs(hudScales) do scale.Scale=compact and 0.72 or 1 end
  rebirthButton.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and 100 or 130)
- tabBar.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and -40 or -60)
+ tabBar.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and -65 or -96)
  powerLabel.Position=UDim2.new(0.5,0,0,compact and 55 or 74)
  toastFrame.Size=UDim2.new(0,math.min(420,size.X-24),0,50)
 end
@@ -1293,3 +1307,13 @@ end
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutUtilities)
 resizeHUD() layoutUtilities()
 Remotes.RequestData:FireServer()
+
+-- Boss fight HUD (name, HP bar, timer) and victory / time's-up results.
+require(script.BossUI).Start({
+ screenGui=screenGui,
+ bossRemote=Remotes:WaitForChild("BossState"),
+ formatNumber=formatNumber,
+ showToast=showToast,
+ celebrate=celebrate,
+ hideDuringFight={objective},
+})

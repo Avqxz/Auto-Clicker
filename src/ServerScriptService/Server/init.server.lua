@@ -44,6 +44,10 @@ local EggResultRemote = createRemoteEvent("EggResult")
 local EggLockedRemote = createRemoteEvent("EggLocked")
 local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
 local ClickResultRemote = createRemoteEvent("ClickResult")
+local BossStateRemote = createRemoteEvent("BossState")
+local EquipGearRemote = createRemoteEvent("EquipGear")
+local UnequipGearRemote = createRemoteEvent("UnequipGear")
+local DiscardGearRemote = createRemoteEvent("DiscardGear")
 local PickStarterPetRemote = createRemoteEvent("PickStarterPet")
 
 local FeedbackRemote=createRemoteEvent("Feedback")
@@ -53,6 +57,9 @@ local RequestDataRemote=createRemoteEvent("RequestData")
 local PromoCodes=require(script.PromoCodes)
 local lastClickTimes = {}
 local comboStates = {} -- [userId] = { Count, Last }
+local burstCounters = {} -- [userId] = clicks counted toward gear bursts
+local bossFights = {} -- [userId] = { Boss, Health, Ends }
+local bossCooldowns = {} -- [userId] = { [bossId] = os.clock() when it can be fought again }
 local limits={}
 local function allow(player,key,seconds)
  local id=player.UserId limits[id]=limits[id] or {}
@@ -162,7 +169,141 @@ Players.PlayerRemoving:Connect(function(player)
 	PetFollowers.Clear(player)
 	lastClickTimes[player.UserId] = nil
 	comboStates[player.UserId] = nil
+	burstCounters[player.UserId] = nil
+	bossFights[player.UserId] = nil
+	bossCooldowns[player.UserId] = nil
  limits[player.UserId]=nil
+end)
+
+-- ===== Boss fights =====
+-- Personal, timed fights started from a boss's Fight prompt. Clicks damage the boss (see handleClick).
+
+local function endBossFight(player, fight, won)
+	bossFights[player.UserId] = nil
+	bossCooldowns[player.UserId] = bossCooldowns[player.UserId] or {}
+	bossCooldowns[player.UserId][fight.Boss.Id] = os.clock() + (if won then GameConfig.BossWinCooldown else GameConfig.BossLossCooldown)
+end
+
+local function winBossFight(player, data, fight)
+	local boss = fight.Boss
+	endBossFight(player, fight, true)
+	local coins = boss.RewardCoins * GameConfig.GetRebirthMultiplier(data.RebirthCount)
+	earn(data, coins)
+	local gems = boss.RewardGems
+	data.Gems = (data.Gems or 0) + gems
+
+	-- Drop one of the boss's gear pieces (Gems instead if the gear bag is full).
+	local drops = {}
+	for _, item in ipairs(GameConfig.Gear) do
+		if item.Boss == boss.Id then
+			table.insert(drops, item)
+		end
+	end
+	local dropId
+	local gear = data.Gear
+	if #drops > 0 and #gear.Items < GameConfig.MaxGearItems then
+		local item = drops[math.random(#drops)]
+		dropId = item.Id
+		local uid = gear.NextUid
+		gear.NextUid += 1
+		table.insert(gear.Items, { Uid = uid, Id = item.Id })
+		if not gear.Equipped[item.Slot] then
+			gear.Equipped[item.Slot] = uid -- fill an empty slot automatically
+		end
+	else
+		data.Gems += gems
+		gems *= 2
+	end
+
+	BossStateRemote:FireClient(player, "win", { Coins = coins, Gems = gems, Gear = dropId })
+	updateLeaderstats(player)
+	pushData(player)
+end
+
+local function startBossFight(player, boss)
+	local data = PlayerData.Get(player)
+	if not data or bossFights[player.UserId] then
+		return
+	end
+	local zone = findById(GameConfig.Zones, boss.Zone)
+	if zone and data.RebirthCount < zone.RequiredRebirths then
+		return
+	end
+	local readyAt = bossCooldowns[player.UserId] and bossCooldowns[player.UserId][boss.Id]
+	if readyAt and os.clock() < readyAt then
+		FeedbackRemote:FireClient(player, "Info", boss.Name .. " is recovering — back in " .. math.ceil(readyAt - os.clock()) .. "s")
+		return
+	end
+	bossFights[player.UserId] = { Boss = boss, Health = boss.Health, Ends = os.clock() + GameConfig.BossFightSeconds }
+	BossStateRemote:FireClient(player, "start", { Id = boss.Id, Name = boss.Name, Health = boss.Health, Seconds = GameConfig.BossFightSeconds })
+end
+
+for bossId, ref in pairs(mapRefs.Bosses) do
+	local boss = GameConfig.GetBoss(bossId)
+	ref.Prompt.Triggered:Connect(function(player)
+		startBossFight(player, boss)
+	end)
+end
+
+RunService.Heartbeat:Connect(function()
+	local now = os.clock()
+	for userId, fight in pairs(bossFights) do
+		if now > fight.Ends then
+			local player = Players:GetPlayerByUserId(userId)
+			if player then
+				endBossFight(player, fight, false)
+				BossStateRemote:FireClient(player, "lose")
+			else
+				bossFights[userId] = nil
+			end
+		end
+	end
+end)
+
+-- ===== Gear =====
+
+local function findGear(data, uid)
+	for i, owned in ipairs(data.Gear.Items) do
+		if owned.Uid == uid then
+			return owned, i
+		end
+	end
+	return nil
+end
+
+EquipGearRemote.OnServerEvent:Connect(function(player, uid)
+	if type(uid) ~= "number" or not allow(player, "gear", 0.1) then return end
+	local data = PlayerData.Get(player)
+	local owned = data and findGear(data, uid)
+	local item = owned and GameConfig.GetGear(owned.Id)
+	if item then
+		data.Gear.Equipped[item.Slot] = uid
+		pushData(player)
+	end
+end)
+
+UnequipGearRemote.OnServerEvent:Connect(function(player, slot)
+	if type(slot) ~= "string" or not allow(player, "gear", 0.1) then return end
+	local data = PlayerData.Get(player)
+	if data and data.Gear.Equipped[slot] then
+		data.Gear.Equipped[slot] = nil
+		pushData(player)
+	end
+end)
+
+DiscardGearRemote.OnServerEvent:Connect(function(player, uid)
+	if type(uid) ~= "number" or not allow(player, "gear", 0.1) then return end
+	local data = PlayerData.Get(player)
+	local owned, index = data and findGear(data, uid)
+	if owned then
+		for slot, equippedUid in pairs(data.Gear.Equipped) do
+			if equippedUid == uid then
+				data.Gear.Equipped[slot] = nil
+			end
+		end
+		table.remove(data.Gear.Items, index)
+		pushData(player)
+	end
 end)
 
 -- ===== Clicking =====
@@ -192,12 +333,38 @@ local function handleClick(player)
 	combo.Last = now
 
 	local skills = data.Skills
-	local crit = math.random() < GameConfig.GetCritChance(levels, skills)
+	local gear = GameConfig.GetGearStats(data)
+	local crit = math.random() < GameConfig.GetCritChance(levels, skills, gear)
 	local earned = getClickPower(data) * GameConfig.GetComboMultiplier(combo.Count, skills)
-		* (if crit then GameConfig.GetCritDamage(levels, skills) else 1)
-	earn(data,earned)
+		* (if crit then GameConfig.GetCritDamage(levels, skills, gear) else 1)
 
-	ClickResultRemote:FireClient(player, earned, crit, combo.Count)
+	-- Gear bursts: every Nth click is multiplied.
+	local clicks = (burstCounters[player.UserId] or 0) + 1
+	burstCounters[player.UserId] = clicks
+	local burstName
+	for _, burst in ipairs(gear.Bursts) do
+		if clicks % burst.Every == 0 then
+			earned *= burst.Multiplier
+			burstName = burst.Name
+		end
+	end
+
+	-- In a boss fight (and close enough), the click hits the boss instead of earning coins.
+	local fight = bossFights[player.UserId]
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	local bossPos = fight and mapRefs.Bosses[fight.Boss.Id] and mapRefs.Bosses[fight.Boss.Id].Position
+	if fight and root and bossPos and (root.Position - bossPos).Magnitude <= GameConfig.BossRange then
+		fight.Health = math.max(0, fight.Health - earned)
+		ClickResultRemote:FireClient(player, earned, crit, combo.Count, "boss", burstName)
+		BossStateRemote:FireClient(player, "hp", fight.Health)
+		if fight.Health <= 0 then
+			winBossFight(player, data, fight)
+		end
+		return
+	end
+
+	earn(data,earned)
+	ClickResultRemote:FireClient(player, earned, crit, combo.Count, nil, burstName)
 	updateLeaderstats(player)
 	pushData(player)
 end

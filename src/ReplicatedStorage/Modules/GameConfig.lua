@@ -120,14 +120,17 @@ GameConfig.ClickBoosts = {
 }
 
 -- `skills` (the player's skill-tree levels) is optional everywhere below.
-function GameConfig.GetCritChance(levels, skills)
+-- `gear` is GameConfig.GetGearStats(data); both it and `skills` are optional.
+function GameConfig.GetCritChance(levels, skills, gear)
 	return GameConfig.Crit.BaseChance + (levels.CritChance or 0) * GameConfig.ClickBoosts[1].PerLevel
 		+ GameConfig.GetSkillLevel(skills, "CritMastery") * 0.01
+		+ (gear and gear.CritChance or 0)
 end
 
-function GameConfig.GetCritDamage(levels, skills)
+function GameConfig.GetCritDamage(levels, skills, gear)
 	return GameConfig.Crit.BaseDamage + (levels.CritDamage or 0) * GameConfig.ClickBoosts[2].PerLevel
 		+ GameConfig.GetSkillLevel(skills, "MegaCrits") * 0.25
+		+ (gear and gear.CritDamage or 0)
 end
 
 function GameConfig.GetComboWindow(levels)
@@ -283,6 +286,120 @@ GameConfig.Zones = {
 
 GameConfig.EggHatchRange = 40 -- studs; eggs outside the starting zone must be hatched in person
 
+-- ===== Bosses & equipment =====
+-- Each zone has a boss at its far end. Fights are personal and timed: while a player is fighting,
+-- their clicks deal damage (same power/combo/crit math) instead of earning coins. Winning pays
+-- coins + Gems and drops one of the boss's four gear pieces.
+
+GameConfig.BossFightSeconds = 60
+GameConfig.BossWinCooldown = 90
+GameConfig.BossLossCooldown = 10
+GameConfig.BossRange = 70 -- studs; clicks only hit the boss while this close
+GameConfig.MaxGearItems = 40
+
+GameConfig.Bosses = {
+	{ Zone = "Forest", Id = "Mossback", Name = "MOSSBACK", Health = 3000, RewardCoins = 1200, RewardGems = 2, Rarity = "Common" },
+	{ Zone = "Ice", Id = "FrostGolem", Name = "FROST GOLEM", Health = 40000, RewardCoins = 15000, RewardGems = 4, Rarity = "Rare" },
+	{ Zone = "Lava", Id = "MagmaKing", Name = "MAGMA KING", Health = 600000, RewardCoins = 200000, RewardGems = 8, Rarity = "Epic" },
+	{ Zone = "Candy", Id = "GummyTyrant", Name = "GUMMY TYRANT", Health = 10000000, RewardCoins = 3000000, RewardGems = 15, Rarity = "Legendary" },
+	{ Zone = "Space", Id = "VoidTitan", Name = "VOID TITAN", Health = 250000000, RewardCoins = 60000000, RewardGems = 30, Rarity = "Mythic" },
+}
+
+GameConfig.GearSlots = { "Gloves", "Aura", "Core", "Artifact" }
+
+-- Stats: ClickPower (+x click power), CritChance, CritDamage, AutoPower (+x auto income),
+-- Burst = { Every, Multiplier, Name }: every Nth click is multiplied.
+GameConfig.Gear = {
+	{ Id = "LeafGloves", Boss = "Mossback", Slot = "Gloves", Name = "Leaf Gloves", Stats = { ClickPower = 0.15 } },
+	{ Id = "SproutAura", Boss = "Mossback", Slot = "Aura", Name = "Sprout Aura", Stats = { CritChance = 0.02 } },
+	{ Id = "AcornCore", Boss = "Mossback", Slot = "Core", Name = "Acorn Core", Stats = { AutoPower = 0.2 } },
+	{ Id = "MossyCharm", Boss = "Mossback", Slot = "Artifact", Name = "Mossy Charm", Stats = { CritDamage = 0.2 } },
+
+	{ Id = "FrostGloves", Boss = "FrostGolem", Slot = "Gloves", Name = "Frost Gloves", Stats = { ClickPower = 0.35, CritChance = 0.01 } },
+	{ Id = "BlizzardAura", Boss = "FrostGolem", Slot = "Aura", Name = "Blizzard Aura", Stats = { CritChance = 0.04 } },
+	{ Id = "GlacierCore", Boss = "FrostGolem", Slot = "Core", Name = "Glacier Core", Stats = { AutoPower = 0.5 } },
+	{ Id = "SnowflakeRelic", Boss = "FrostGolem", Slot = "Artifact", Name = "Snowflake Relic", Stats = { CritDamage = 0.4 } },
+
+	{ Id = "MagmaGloves", Boss = "MagmaKing", Slot = "Gloves", Name = "Magma Gloves", Stats = { ClickPower = 0.7 } },
+	{ Id = "InfernoAura", Boss = "MagmaKing", Slot = "Aura", Name = "Inferno Aura", Stats = { CritChance = 0.06, CritDamage = 0.2 } },
+	{ Id = "VolcanicCore", Boss = "MagmaKing", Slot = "Core", Name = "Volcanic Core", Stats = { AutoPower = 1 } },
+	{ Id = "EmberIdol", Boss = "MagmaKing", Slot = "Artifact", Name = "Ember Idol",
+		Stats = { CritDamage = 0.3, Burst = { Every = 100, Multiplier = 5, Name = "EMBER BURST" } } },
+
+	{ Id = "SugarGloves", Boss = "GummyTyrant", Slot = "Gloves", Name = "Sugar Gloves", Stats = { ClickPower = 1.2, CritChance = 0.02 } },
+	{ Id = "SprinkleAura", Boss = "GummyTyrant", Slot = "Aura", Name = "Sprinkle Aura", Stats = { CritChance = 0.08 } },
+	{ Id = "GumdropCore", Boss = "GummyTyrant", Slot = "Core", Name = "Gumdrop Core", Stats = { AutoPower = 1.8 } },
+	{ Id = "LollipopTotem", Boss = "GummyTyrant", Slot = "Artifact", Name = "Lollipop Totem", Stats = { CritDamage = 1 } },
+
+	{ Id = "QuantumGloves", Boss = "VoidTitan", Slot = "Gloves", Name = "Quantum Gloves",
+		Stats = { ClickPower = 2, CritChance = 0.08, Burst = { Every = 100, Multiplier = 10, Name = "QUANTUM BURST" } } },
+	{ Id = "NebulaAura", Boss = "VoidTitan", Slot = "Aura", Name = "Nebula Aura", Stats = { CritChance = 0.12, CritDamage = 0.5 } },
+	{ Id = "StarCore", Boss = "VoidTitan", Slot = "Core", Name = "Star Core", Stats = { AutoPower = 3 } },
+	{ Id = "VoidArtifact", Boss = "VoidTitan", Slot = "Artifact", Name = "Void Artifact", Stats = { CritDamage = 1.5 } },
+}
+
+function GameConfig.GetBoss(id)
+	for _, boss in ipairs(GameConfig.Bosses) do
+		if boss.Id == id then
+			return boss
+		end
+	end
+	return nil
+end
+
+function GameConfig.GetGear(id)
+	for _, item in ipairs(GameConfig.Gear) do
+		if item.Id == id then
+			return item
+		end
+	end
+	return nil
+end
+
+-- Rarity of a gear piece = its boss's rarity.
+function GameConfig.GetGearRarity(item)
+	local boss = GameConfig.GetBoss(item.Boss)
+	return boss and boss.Rarity or "Common"
+end
+
+-- Summed stats of the equipped gear (data.Gear = { Items = { {Uid, Id} }, Equipped = { [slot] = uid } }).
+function GameConfig.GetGearStats(data)
+	local total = { ClickPower = 0, CritChance = 0, CritDamage = 0, AutoPower = 0, Bursts = {} }
+	local gear = data and data.Gear
+	if not gear then
+		return total
+	end
+	for _, uid in pairs(gear.Equipped or {}) do
+		for _, owned in ipairs(gear.Items or {}) do
+			if owned.Uid == uid then
+				local item = GameConfig.GetGear(owned.Id)
+				if item then
+					for stat, value in pairs(item.Stats) do
+						if stat == "Burst" then
+							table.insert(total.Bursts, value)
+						else
+							total[stat] += value
+						end
+					end
+				end
+			end
+		end
+	end
+	return total
+end
+
+-- One-line stat summary for UI, e.g. "+35% click • +1% crit".
+function GameConfig.DescribeGear(item)
+	local parts = {}
+	local st = item.Stats
+	if st.ClickPower then table.insert(parts, "+" .. math.floor(st.ClickPower * 100 + 0.5) .. "% click") end
+	if st.CritChance then table.insert(parts, "+" .. math.floor(st.CritChance * 100 + 0.5) .. "% crit") end
+	if st.CritDamage then table.insert(parts, "+" .. string.format("%.1f", st.CritDamage) .. "x crit dmg") end
+	if st.AutoPower then table.insert(parts, "+" .. math.floor(st.AutoPower * 100 + 0.5) .. "% auto") end
+	if st.Burst then table.insert(parts, st.Burst.Name .. ": every " .. st.Burst.Every .. " clicks x" .. st.Burst.Multiplier) end
+	return table.concat(parts, " • ")
+end
+
 -- ===== Pets & eggs =====
 
 GameConfig.BaseMaxEquippedPets = 3
@@ -436,11 +553,12 @@ function GameConfig.RollPet(egg, skills)
 	return egg.Pets[#egg.Pets]
 end
 
--- Coins per click before combo/crit: base x pets x Ascension x Click Mastery.
+-- Coins per click before combo/crit: base x pets x Ascension x Click Mastery x gear.
 function GameConfig.GetClickPower(data, equippedPets)
 	return data.ClickPower * GameConfig.GetPetMultiplierTotal(equippedPets)
 		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
 		* (1 + 0.1 * GameConfig.GetSkillLevel(data.Skills, "ClickMastery"))
+		* (1 + GameConfig.GetGearStats(data).ClickPower)
 end
 
 -- Coins per second from auto-clickers: base x pets x Ascension x Auto Power.
@@ -452,6 +570,7 @@ function GameConfig.GetAutoIncome(data, equippedPets)
 	return perSecond * GameConfig.GetPetMultiplierTotal(equippedPets)
 		* GameConfig.GetRebirthMultiplier(data.RebirthCount)
 		* (1 + 0.2 * GameConfig.GetSkillLevel(data.Skills, "AutoPower"))
+		* (1 + GameConfig.GetGearStats(data).AutoPower)
 end
 
 -- Multiplicative stack of every equipped pet's multiplier.

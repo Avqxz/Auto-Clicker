@@ -17,6 +17,8 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Auto-clickers** — spend coins on passive generators that earn coins every second, even between clicks (also boosted by equipped pets).
 - **Ascension** — reset coins, upgrades, auto-clickers and click power for a permanent power multiplier, an extra pet-equip slot, and **Gems** (more if you overshoot the requirement). Pets, Gems and skills are kept. Each Ascension also opens the next zone gate. The Ascend panel previews the Gems, the multiplier change and what unlocks. (Stored as `RebirthCount` in saves.)
 - **Skill tree** — permanent nodes bought with Gems in three branches: Power (Click Mastery, Crit Mastery, Mega Crits, Combo Boost), Automation (Auto Power, Offline Earnings, Head Start) and Luck (Egg Luck, Pet Slots, Golden Touch). Later nodes need their branch's first node.
+- **Bosses** — each zone has a boss at its far end (Mossback, Frost Golem, Magma King, Gummy Tyrant, Void Titan). A Fight prompt starts a personal 60-second fight: your clicks damage the boss (same power/combo/crit math) instead of earning coins. Wins pay coins, Gems and a guaranteed gear drop; short cooldowns after wins and losses.
+- **Equipment** — Gloves / Aura / Core / Artifact slots (GEAR tab). Each boss drops one of four themed pieces, Common (Forest) up to Mythic (Space), adding click power, crit chance/damage or auto income; Ember Idol and Quantum Gloves add a burst (every 100th click x5 / x10). Up to 40 pieces in the bag; Discard needs a second tap.
 - **Leaderboard** — Coins and Rebirths show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
@@ -48,6 +50,8 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/ZoneGates.lua    # Opens the zone gates the local player has unlocked
   StarterPlayer/StarterPlayerScripts/Client/ClickFeel.lua    # Floating click numbers, combo meter and OVERDRIVE effects
   StarterPlayer/StarterPlayerScripts/Client/AscensionUI.lua  # Ascend panel, Gem-bought skill tree panel and HUD gem counter
+  StarterPlayer/StarterPlayerScripts/Client/BossUI.lua       # Boss fight HUD (HP bar, timer) and results
+  StarterPlayer/StarterPlayerScripts/Client/GearUI.lua       # GEAR tab: equipped slots and gear bag
 ```
 
 ## Running it in Roblox Studio
