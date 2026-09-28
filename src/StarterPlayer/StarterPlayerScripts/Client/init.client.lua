@@ -366,8 +366,20 @@ local ascensionUI = require(script.AscensionUI).Build({
 	ascendRemote = AscendRemote,
 	unlockSkillRemote = UnlockSkillRemote,
 })
+-- The server opens panels from in-world stations: "Ascend"/"Skills", or any panel by name
+-- ("Daily" -> DailyFrame, "TokenShop" -> TokenShopFrame).
 Remotes:WaitForChild("OpenPanel").OnClientEvent:Connect(function(name)
-	ascensionUI.Open(name)
+	if name == "Ascend" or name == "Skills" then
+		ascensionUI.Open(name)
+		return
+	end
+	local frame = screenGui:FindFirstChild(name .. "Frame")
+	if frame then
+		for _, p in ipairs(panels) do
+			p.Visible = false
+		end
+		frame.Visible = true
+	end
 end)
 
 -- GEAR tab: equipped slots and the gear bag (gear drops from bosses).

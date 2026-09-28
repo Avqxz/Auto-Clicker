@@ -863,6 +863,13 @@ local function addClickDetector(part, maxDistance)
 end
 
 addClickDetector(mapRefs.ClickOrb).MouseClick:Connect(handleClick)
+-- Pack stations (treasure chest -> Daily Rewards, enchanting table -> Token Shop) open their panel.
+for kind, prompt in pairs(mapRefs.Stations or {}) do
+	prompt.Triggered:Connect(function(player)
+		OpenPanelRemote:FireClient(player, kind)
+	end)
+end
+
 addClickDetector(mapRefs.RebirthAltar).MouseClick:Connect(function(player)
 	OpenPanelRemote:FireClient(player, "Ascend") -- confirm in the Ascend panel rather than ascending on one click
 end)

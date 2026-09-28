@@ -116,3 +116,15 @@ client so the UI always reflects the same numbers the server enforces.
 - Add more upgrades/auto-clickers by appending entries to the `Upgrades` or `AutoClickers` tables; the Shop UI generates itself from that list.
 - Add more eggs/pets by appending to the `Eggs` table (each pet needs `Name`, `Rarity`, `Weight`, `Multiplier`); the Eggs and Pets UIs generate themselves from that list.
 - Tune `BaseMaxEquippedPets` and `FusionRequirement` to change how many pets a player can equip at once and how many duplicates are needed to fuse a Golden pet.
+
+## Credits
+
+- "Simulator Model Pack" by MonzterDev — http://monzter.dev/ (Ascend building, zone-gate arches,
+  treasure chest, enchanting table, clouds). The model files are **not** in this repo: the license
+  forbids redistributing them. To rebuild locally, download the pack from
+  https://monzter.dev/assets/clicking-simulator-model-pack/ and put its `.rbxm` files in
+  `assets/monzter-pack/` (git-ignored); Rojo syncs them into `ServerStorage.MonzterPack`. Without
+  them the game falls back to its built-in look. The license also asks for this credit wherever you
+  post about the game (e.g. its description or a DevForum post).
+- Map biomes: JTea's free simulator pack and free Creator Store maps (see ASSETS.md).
+- Music: Roblox's licensed APM music library.

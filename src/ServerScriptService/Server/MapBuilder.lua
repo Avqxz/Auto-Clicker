@@ -24,6 +24,7 @@ local function label(p,text,maxDistance)
  local gui=Instance.new('BillboardGui') gui.Size=UDim2.fromOffset(210,56) gui.StudsOffset=V(0,5,0) gui.MaxDistance=maxDistance or 95 gui.Parent=p
  local t=Instance.new('TextLabel') t.Size=UDim2.fromScale(1,1) t.BackgroundTransparency=1 t.Text=text
  t.Font=Enum.Font.FredokaOne t.TextScaled=true t.TextColor3=C(255,255,255) t.TextStrokeColor3=C(25,44,62) t.TextStrokeTransparency=0 t.Parent=gui
+ return gui
 end
 local function place(template,parent,name,pos,height)
  local m=template:Clone() m.Name=name m.Parent=parent
@@ -36,6 +37,35 @@ local function place(template,parent,name,pos,height)
  end
  return m
 end
+-- Optional MonzterDev "Simulator Model Pack" (ServerStorage.MonzterPack; git-ignored, see README).
+-- Returns nil when the pack or model is missing, so callers keep their fallback. Scales to a target
+-- height or X-width, turns by yaw degrees, and rests the model's lowest point on pos.Y.
+-- Turn angles are in one table so they're easy to adjust.
+local PACK_YAW={RebirthShop=-90,PortalWorld=0,GroupChest=180,EnchantingTable=180,Cloud=0}
+local function packModel(name,key,parent,newName,pos,opts)
+ local pack=game.ServerStorage:FindFirstChild('MonzterPack')
+ local template=pack and pack:FindFirstChild(name)
+ if not template then return nil end
+ local m=template:Clone()
+ if not m:IsA('Model') then
+  local wrapper=Instance.new('Model') m.Parent=wrapper m=wrapper
+ end
+ m.Name=newName
+ for _,d in ipairs(m:GetDescendants()) do
+  if d:IsA('LuaSourceContainer') then d:Destroy()
+  elseif d:IsA('BasePart') then d.Anchored=true if opts.decor then d.CanCollide=false d.CanQuery=false end end
+ end
+ m.Parent=parent
+ local _,size=m:GetBoundingBox()
+ local scale=if opts.height then opts.height/size.Y elseif opts.width then opts.width/size.X else 1
+ m:ScaleTo(m:GetScale()*scale)
+ local center=m:GetBoundingBox()
+ m:PivotTo(CFrame.new(pos)*CFrame.Angles(0,math.rad(PACK_YAW[key] or 0),0)*center:Inverse()*m:GetPivot())
+ local cf,newSize=m:GetBoundingBox()
+ m:PivotTo(m:GetPivot()+V(0,pos.Y-(cf.Position.Y-newSize.Y/2),0))
+ return m
+end
+
 local function bounds(x)
  if x:IsA('Model') then return x:GetBoundingBox() end
  return x.CFrame,x.Size
@@ -147,12 +177,20 @@ function MapBuilder.Build()
   part(zones,'Walkway',V(24,2,w.length+4),V(0,0,w.midZ),C(240,226,204))
   for _,side in ipairs({-1,1}) do part(zones,'WalkwayRail',V(1,2,w.length+4),V(side*12.5,2,w.midZ),C(255,255,255)) end
   local gateZ=w.entranceZ+1.5
-  for _,side in ipairs({-1,1}) do part(gatesFolder,'GatePillar',V(4,22,4),V(side*14,12,gateZ),C(255,255,255)) end
-  part(gatesFolder,'GateTop',V(32,4,4),V(0,24,gateZ),color)
+  -- Pack portal arch around the gate if available (decor only: the gate part below does the blocking),
+  -- otherwise plain pillars and a lintel.
+  local arch=packModel('Portal World','PortalWorld',gatesFolder,zone.Id..'Arch',V(0,1,gateZ),{width=40,decor=true})
+  local signY=26
+  if arch then
+   local cf,size=arch:GetBoundingBox() signY=cf.Position.Y+size.Y/2+3
+  else
+   for _,side in ipairs({-1,1}) do part(gatesFolder,'GatePillar',V(4,22,4),V(side*14,12,gateZ),C(255,255,255)) end
+   part(gatesFolder,'GateTop',V(32,4,4),V(0,24,gateZ),color)
+  end
   local gate=part(gatesFolder,zone.Id..'Gate',V(24,20,1.5),V(0,11,gateZ),color,Enum.Material.ForceField)
   gate.Transparency=0.3 gate:SetAttribute('Zone',zone.Id) gate:SetAttribute('ZoneName',zone.Name)
   gate:SetAttribute('RequiredRebirths',zone.RequiredRebirths)
-  local sign=part(gatesFolder,zone.Id..'GateSign',V(1,1,1),V(0,26,gateZ),color) sign.Transparency=1 sign.CanCollide=false sign.CanQuery=false
+  local sign=part(gatesFolder,zone.Id..'GateSign',V(1,1,1),V(0,signY,gateZ),color) sign.Transparency=1 sign.CanCollide=false sign.CanQuery=false
   label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' Ascension'..(zone.RequiredRebirths==1 and '' or 's'),160)
   table.insert(gates,gate)
  end
@@ -167,7 +205,35 @@ function MapBuilder.Build()
  local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,5,10),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
  label(orb,'CLICK TO EARN')
  local altar=pad('RebirthAltar',V(49,1.5,0),C(177,104,240)) label(altar,'ASCEND\nGems + permanent power')
- place(library.Forest['Extra Portal']:GetChildren()[1],zones,'RebirthShrine',V(49,1,0),18)
+ -- Ascend building: the pack's Rebirth Shop just behind the altar pad, else the JTea portal shrine.
+ local lobby=placed[1].model
+ clearBox({lobby},CFrame.new(V(66,20,0)),V(24,38,26))
+ if not packModel('Rebirth Shop','RebirthShop',zones,'RebirthShop',V(66,1,0),{height=20}) then
+  place(library.Forest['Extra Portal']:GetChildren()[1],zones,'RebirthShrine',V(49,1,0),18)
+ end
+
+ -- Lobby stations from the pack: a treasure chest that opens Daily Rewards and an enchanting table
+ -- that opens the Token Shop (boosts). Each gets a prompt; the server opens the panel (init.server.lua).
+ local stations={}
+ local function station(name,key,kind,pos,height,action)
+  clearBox({lobby},CFrame.new(pos+V(0,12,0)),V(14,22,14))
+  local m=packModel(name,key,zones,kind..'Station',pos,{height=height})
+  if not m then return end
+  local cf,size=m:GetBoundingBox()
+  local hit=part(interactive,kind..'Prompt',V(2,2,2),cf.Position,C(255,255,255))
+  hit.Transparency=1 hit.CanCollide=false hit.CanQuery=false
+  local prompt=Instance.new('ProximityPrompt') prompt.ActionText=action prompt.ObjectText=''
+  prompt.HoldDuration=0 prompt.MaxActivationDistance=14 prompt.RequiresLineOfSight=false prompt.Parent=hit
+  label(hit,string.upper(action),90).StudsOffset=V(0,size.Y/2+2,0)
+  stations[kind]=prompt
+ end
+ station('Group Chest','GroupChest','Daily',V(24,1,46),7,'Daily Rewards')
+ station('Enchanting Table','EnchantingTable','TokenShop',V(-24,1,46),6,'Boosts')
+
+ -- A few pack clouds drifting high over the lobby.
+ for i,spot in ipairs({V(-60,78,-20),V(40,88,30),V(90,74,-60),V(-100,84,60),V(10,92,-90)}) do
+  packModel('Cloud','Cloud',zones,'Cloud',spot,{width=28+i*5,decor=true})
+ end
 
  -- Egg stands: one glass capsule from the pack per egg (Candy/Space reuse the Forest capsule),
  -- its egg recolored per zone, with an invisible clickable hitbox around it. The starting egg keeps
@@ -237,6 +303,6 @@ function MapBuilder.Build()
  grade.Name='SimulatorGrade' grade.Saturation=0.2 grade.Contrast=0.08 grade.Brightness=0.02 grade.Parent=lighting
  local bloom=lighting:FindFirstChild('SimulatorBloom') or Instance.new('BloomEffect')
  bloom.Name='SimulatorBloom' bloom.Intensity=0.3 bloom.Size=20 bloom.Threshold=1.4 bloom.Parent=lighting
- return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses}
+ return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses,Stations=stations}
 end
 return MapBuilder
