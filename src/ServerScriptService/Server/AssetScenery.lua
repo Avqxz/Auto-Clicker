@@ -17,22 +17,18 @@ function Assets.Build(map)
   for _,p in ipairs(model:GetDescendants()) do
    if p:IsA('BasePart') then
     p.Anchored=true
-    if name=='Rock' then p.Material=Enum.Material.Slate p.Color=Color3.fromRGB(127,115,166)
-    elseif name=='Cottage' and p.Material==Enum.Material.SmoothPlastic then p.Material=Enum.Material.Wood
-    elseif name=='Tree' or name=='Pine' then
-     p.Material=p.Color.G>p.Color.R and Enum.Material.LeafyGrass or Enum.Material.Wood
-    end
+    -- Materials are flattened to SmoothPlastic by MapBuilder's cartoon pass.
+    if name=='Rock' then p.Color=Color3.fromRGB(150,136,200) end
    end
   end
   return model
  end
  local rng=Random.new(915)
- for _,center in ipairs({0,-310}) do
-  local frost=center~=0
+ for _,center in ipairs({0}) do
   for _,side in ipairs({-1,1}) do
    for i=1,7 do
     local x=side*rng:NextNumber(88,112) local z=center-118+i*30
-    place((i%2==0 and not frost) and 'Tree' or 'Pine',Vector3.new(x,0.6,z),rng:NextNumber(22,34),rng:NextNumber(0,360))
+    place(i%2==0 and 'Tree' or 'Pine',Vector3.new(x,0.6,z),rng:NextNumber(22,34),rng:NextNumber(0,360))
     place('Rock',Vector3.new(x-side*12,0.7,z+8),rng:NextNumber(4,7),i*37)
     place('Bush',Vector3.new(x-side*17,0.6,z-6),rng:NextNumber(3,5),i*12)
    end

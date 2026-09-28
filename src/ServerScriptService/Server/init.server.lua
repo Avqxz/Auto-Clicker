@@ -39,7 +39,8 @@ local EquipPetRemote = createRemoteEvent("EquipPet")
 local UnequipPetRemote = createRemoteEvent("UnequipPet")
 local FusePetsRemote = createRemoteEvent("FusePets")
 local EggResultRemote = createRemoteEvent("EggResult")
-local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
+local EggLockedRemote = createRemoteEvent("EggLocked")
+local PurchaseJumpRemote = createRemoteEvent("PurchaseJump")
 local PickStarterPetRemote = createRemoteEvent("PickStarterPet")
 
 local FeedbackRemote=createRemoteEvent("Feedback")
@@ -218,6 +219,27 @@ PurchaseAutoClickerRemote.OnServerEvent:Connect(function(player, autoId)
 	pushData(player)
 end)
 
+PurchaseJumpRemote.OnServerEvent:Connect(function(player)
+	if not allow(player, "purchase", 0.12) then return end
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+
+	local level = data.JumpLevel or 0
+	local cost = GameConfig.ExtraJump.Costs[level + 1]
+	if not cost or data.Coins < cost then
+		return
+	end
+
+	data.Coins -= cost
+	data.JumpLevel = level + 1
+	FeedbackRemote:FireClient(player, "Purchase", "Extra jump! You can now jump " .. GameConfig.GetMaxJumps(data.JumpLevel) .. " times")
+
+	updateLeaderstats(player)
+	pushData(player)
+end)
+
 -- ===== Pets & eggs =====
 
 local function handleHatchEgg(player, eggId)
@@ -229,7 +251,19 @@ local function handleHatchEgg(player, eggId)
 	end
 
 	if data.RebirthCount < egg.RequiredRebirths then
+		EggLockedRemote:FireClient(player, egg.Name, egg.RequiredRebirths)
 		return
+	end
+
+	-- Island eggs must be hatched in person, so the jumps needed to reach them matter.
+	if egg.Zone ~= "Lobby" then
+		local eggPart = mapRefs.EggParts[egg.Id]
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if not eggPart or not root or (root.Position - eggPart.Position).Magnitude > GameConfig.IslandHatchRange then
+			local island = findById(GameConfig.Islands, egg.Zone)
+			FeedbackRemote:FireClient(player, "Info", "Jump up to " .. (island and island.Name or egg.Zone) .. " to hatch the " .. egg.Name .. "!")
+			return
+		end
 	end
 
 	if data.Coins < egg.Cost then
@@ -459,51 +493,6 @@ for eggId, eggPart in pairs(mapRefs.EggParts) do
 		handleHatchEgg(player, eggId)
 	end)
 end
-
--- ===== Frost World portal (rebirth-gated teleport) =====
--- The portal is non-solid. Touching it teleports qualifying players to its
--- "Destination" attribute; everyone else gets a toast and is pushed back.
-
-local zoneLockedCooldown = {}
-
-mapRefs.FrostPortal.Touched:Connect(function(hit)
-	local character = hit.Parent
-	local player = Players:GetPlayerFromCharacter(character)
-	if not player then
-		return
-	end
-
-	local data = PlayerData.Get(player)
-	if not data then
-		return
-	end
-
-	if data.RebirthCount >= GameConfig.FrostZoneRequiredRebirths then
-        local root=character:FindFirstChild("HumanoidRootPart")
-        if root and allow(player,"gate",1) then
-         root.CFrame=CFrame.new(mapRefs.FrostPortal:GetAttribute("Destination"))
-        end
-		return
-	end
-
-	if zoneLockedCooldown[player.UserId] then
-		return
-	end
-	zoneLockedCooldown[player.UserId] = true
-	task.delay(0.5, function()
-		zoneLockedCooldown[player.UserId] = nil
-	end)
-
-	ZoneLockedRemote:FireClient(player, GameConfig.FrostZoneRequiredRebirths)
-
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if rootPart then
-		local delta = rootPart.Position - mapRefs.FrostPortal.Position
-		delta = Vector3.new(delta.X, 0, delta.Z)
-		local pushDirection = if delta.Magnitude > 0 then delta.Unit else Vector3.new(0, 0, 1)
-		rootPart.CFrame = rootPart.CFrame + pushDirection * 6
-	end
-end)
 
 -- ===== Passive income (auto-clickers) =====
 

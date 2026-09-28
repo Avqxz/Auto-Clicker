@@ -11,7 +11,8 @@ Insert JTea's free simulator pack (asset **7151365600**) from the Toolbox and
 move it into ServerStorage, renamed `JTeaSimulatorPack`. `MapBuilder.lua`
 errors on startup without it. It uses these parts of the pack:
 
-- `Forest` / `Ice` → `Map` (zone floors and layout), `Shop` (egg shops), `Extra Portal` (Rebirth shrine, Frost World portal)
+- `Forest` → `Map` (lobby floor and layout), `Shop` (Basic Egg shop), `Extra Portal` (Rebirth shrine)
+- `Ice` → `Shop` (decoration on Ice Island; skipped if missing)
 
 ## Optional: `ServerStorage/EnvironmentAssets`
 
@@ -33,6 +34,7 @@ original size doesn't matter.
 
 ## What the code owns
 
-`MapBuilder.lua` destroys and rebuilds `Workspace.Map` and the terrain under
-both zones on every server start, and sets Lighting. Put hand-placed extras
+`MapBuilder.lua` destroys and rebuilds `Workspace.Map` on every server start,
+clears Terrain under the lobby, builds the sky islands from smooth parts, flattens every map part to SmoothPlastic for
+a cartoon look (Neon/Glass/ForceField kept), and sets Lighting. Put hand-placed extras
 outside `Map`, or they'll be wiped.
