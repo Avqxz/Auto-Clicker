@@ -11,6 +11,7 @@ local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local EggConfig = require(ReplicatedStorage.Modules.EggConfig)
 local PetConfig = require(ReplicatedStorage.Modules.PetConfig)
 local PetModelFactory = require(ReplicatedStorage.Modules.PetModelFactory)
+local NumberFormat = require(ReplicatedStorage.Modules.NumberFormat)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -60,20 +61,8 @@ local currentData = {
 
 -- ===== Helpers =====
 
-local function formatNumber(n)
-	n = math.floor(n)
-	if n >= 1e12 then
-		return string.format("%.2fT", n / 1e12)
-	elseif n >= 1e9 then
-		return string.format("%.2fB", n / 1e9)
-	elseif n >= 1e6 then
-		return string.format("%.2fM", n / 1e6)
-	elseif n >= 1e3 then
-		return string.format("%.2fK", n / 1e3)
-	else
-		return tostring(n)
-	end
-end
+-- Short simulator-style numbers (1.13K, 161.5M, 241.65Qn); see NumberFormat.
+local formatNumber = NumberFormat.Short
 
 local function formatMultiplier(m)
 	return string.format("x%.2f", m)
@@ -152,9 +141,9 @@ local function styleCard(object, color)
  object.BorderSizePixel = 0
  local stroke = Instance.new("UIStroke")
  stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
- stroke.Color = Color3.fromRGB(30, 54, 65)
- stroke.Transparency = 0.55
- stroke.Thickness = 1.5
+ stroke.Color = Color3.fromRGB(22, 32, 58)
+ stroke.Transparency = 0
+ stroke.Thickness = 2.5
  stroke.Parent = object
  local gradient = Instance.new("UIGradient")
  gradient.Color = CARD_GRADIENT
@@ -168,8 +157,8 @@ local function styleButton(button)
  local gradient = styleCard(button, button.BackgroundColor3)
  button.Font = Enum.Font.FredokaOne
  button.AutoButtonColor = false
- local textOutline=Instance.new("UIStroke") textOutline.Color=Color3.fromRGB(26,43,51)
- textOutline.Thickness=1.2 textOutline.Transparency=0.25 textOutline.Parent=button
+ local textOutline=Instance.new("UIStroke") textOutline.Color=Color3.fromRGB(22,32,58)
+ textOutline.Thickness=2 textOutline.Transparency=0 textOutline.Parent=button
  button.TextStrokeTransparency = 1
  local pad = Instance.new("UIPadding")
  pad.PaddingLeft = UDim.new(0,8) pad.PaddingRight = UDim.new(0,8)
@@ -1206,20 +1195,14 @@ local tip=Instance.new("TextLabel") tip.Name="Tip" tip.BackgroundTransparency=1
  tip.TextSize=16 tip.TextColor3=Color3.new(1,1,1) tip.TextStrokeTransparency=0.3 tip.Parent=screenGui
 local panelScales={}
 for _,panel in ipairs(panels) do panelScales[panel]=Instance.new("UIScale",panel) end
-local hudScales={}
-for _,item in ipairs({tabBar,rebirthButton,coinFrame,tapButton}) do hudScales[item]=Instance.new("UIScale",item) end
+-- Panels fit the screen; the HUD itself is laid out by HudStyle.
 local function resizeHUD()
  local size=workspace.CurrentCamera.ViewportSize
- local compact=size.X<700 or size.Y<500
  for _,panel in ipairs(panels) do
   panelScales[panel].Scale=1
   panel.Size=UDim2.fromOffset(math.min(570,size.X-24),math.min(500,size.Y-110))
   panel.Position=UDim2.new(0.5,0,0.5,0)
  end
- for item,scale in pairs(hudScales) do scale.Scale=compact and 0.72 or 1 end
- rebirthButton.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and 100 or 130)
- tabBar.Position=UDim2.new(0,compact and 8 or 16,0.5,compact and -65 or -96)
- powerLabel.Position=UDim2.new(0.5,0,0,compact and 55 or 74)
  toastFrame.Size=UDim2.new(0,math.min(420,size.X-24),0,50)
 end
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(resizeHUD)
@@ -1254,11 +1237,11 @@ require(script.ClickFeel).Start({
 -- position) always play. Power is requested at most as fast as the server awards it
 -- (GameConfig.ClickCooldown); the "+N" numbers and combo come back from the server for those.
 local clickTokens,clickRefill=2,os.clock()
-local tapBaseSize=tapButton.Size
+local tapPunch=tapButton:FindFirstChildOfClass("UIScale") or Instance.new("UIScale",tapButton)
 localClick=function(at)
  playSound("Click")
- tapButton.Size=UDim2.fromOffset(tapBaseSize.X.Offset*0.93,tapBaseSize.Y.Offset*0.86)
- TweenService:Create(tapButton,TweenInfo.new(0.2,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=tapBaseSize}):Play()
+ tapPunch.Scale=0.86
+ TweenService:Create(tapPunch,TweenInfo.new(0.22,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Scale=1}):Play()
  for _=1,(reducedMotion and 2 or 6) do
   local spark=Instance.new("ImageLabel") spark.BackgroundTransparency=1
   spark.Image="rbxasset://textures/particles/sparkles_main.dds"
@@ -1377,16 +1360,7 @@ for _,panel in ipairs(panels) do
   end
  end)
 end
-local function layoutUtilities()
- local size=workspace.CurrentCamera.ViewportSize
- local narrow=size.X<600
- controls.Position=UDim2.new(1,-8,0,narrow and 104 or 10)
- objective.Size=UDim2.fromOffset(math.min(330,size.X-28),40)
- objective.Position=UDim2.new(0.5,0,0,narrow and 60 or 101)
- if narrow then coinFrame.Position=UDim2.new(0.5,0,0,8) powerLabel.Visible=false else powerLabel.Visible=true end
-end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutUtilities)
-resizeHUD() layoutUtilities()
+resizeHUD()
 Remotes.RequestData:FireServer()
 
 -- Boss fight HUD (name, HP bar, timer) and victory / time's-up results.
@@ -1443,4 +1417,15 @@ require(script.StoreUI).Build({
 })
 -- Joyful, calm background music (shuffled, cross-faded) with a 🎵 mute button.
 require(script.MusicPlayer).Start({ screenGui=screenGui, styleButton=styleButton })
+-- Simulator HUD look: top counters, tile grid, Rewards + quick buttons, big click button, chips.
+require(script.HudStyle).Apply({
+ screenGui=screenGui,
+ getData=function() return currentData end,
+ dataChanged=DataUpdatedRemote,
+ formatNumber=formatNumber,
+ getEquippedPets=getEquippedPets,
+ controls=controls,
+ objective=objective,
+ powerLabel=powerLabel,
+})
 resizeHUD() -- size the panels created above

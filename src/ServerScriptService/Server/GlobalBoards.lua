@@ -5,11 +5,7 @@ local Config=require(game.ReplicatedStorage.Modules.GameConfig)
 local Boards={}
 local stores={DSS:GetOrderedDataStore('Clicker_Rebirths_v1'),DSS:GetOrderedDataStore('Clicker_LifetimeCoinsLog_v1')}
 local names={}
-local function format(n)
- if n>=1e12 then return string.format('%.2e',n) end
- for _,unit in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=unit[1] then return string.format('%.1f%s',n/unit[1],unit[2]) end end
- return tostring(math.floor(n))
-end
+local format = require(game.ReplicatedStorage.Modules.NumberFormat).Short
 -- spots: optional { CFrame, CFrame } for the two boards (their front, -Z, is the readable side).
 function Boards.Start(PlayerData, spots)
  local folder=Instance.new('Folder') folder.Name='GlobalLeaderboards' folder.Parent=workspace.Map

@@ -93,35 +93,59 @@ function ClickFeel.Start(deps)
 		end
 	end
 
-	-- Floating numbers are screen-space labels that track the character's position each frame
-	-- (client-created BillboardGuis didn't render reliably), rising and fading over 0.8s.
-	local popups = {} -- { label, offset (studs), born }
-	local POP_LIFE = 0.8
+	-- Click popups: a cursor icon and "+N" that pop in beside the character, arc outward to one side
+	-- and fade (screen-space labels that track the character each frame; client-created
+	-- BillboardGuis didn't render reliably). Crits and bursts are bigger and colored.
+	local popups = {} -- { frame, scale, side, born, big }
+	local POP_LIFE = 0.9
+	local INK = Color3.fromRGB(22, 32, 58)
 	-- mode "boss" = the click hit a boss; burstName = a gear/pet effect that fired on this click.
 	local function popAbove(amount, crit, mode, burstName)
 		local big = crit or burstName ~= nil
+		local frame = Instance.new("Frame")
+		frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		frame.Size = UDim2.fromOffset(big and 280 or 190, big and 50 or 38)
+		frame.BackgroundTransparency = 1
+		frame.ZIndex = 2 -- above the HUD (1), below open panels (3)
+		frame.Position = UDim2.fromOffset(-500, -500) -- off-screen until the first frame positions it
+		frame.Visible = false
+		frame.Parent = screenGui
+		local scale = Instance.new("UIScale", frame)
+		scale.Scale = 0.3
+		local icon = Instance.new("ImageLabel")
+		icon.BackgroundTransparency = 1
+		icon.Image = "rbxassetid://79231008605619" -- cartoon cursor (tools/art/make_cursor_icon.py)
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.fromScale(0, 0.5)
+		icon.Size = UDim2.new(0, big and 50 or 38, 0, big and 50 or 38)
+		icon.Rotation = math.random(-15, 5)
+		icon.ZIndex = 2
+		icon.Visible = mode ~= "boss"
+		icon.Parent = frame
 		local label = Instance.new("TextLabel")
-		label.AnchorPoint = Vector2.new(0.5, 0.5)
-		label.Size = UDim2.fromOffset(big and 300 or 170, big and 52 or 36)
 		label.BackgroundTransparency = 1
+		label.AnchorPoint = Vector2.new(0, 0.5)
+		label.Position = UDim2.new(0, big and 46 or 34, 0.5, 0)
+		label.Size = UDim2.new(1, big and -46 or -34, 1, 0)
 		label.Font = Enum.Font.FredokaOne
 		label.TextScaled = true
-		label.TextStrokeTransparency = 0.2
-		label.TextColor3 = if burstName then Color3.fromRGB(190, 110, 255)
-			elseif crit then Color3.fromRGB(255, 120, 50)
-			elseif mode == "boss" then Color3.fromRGB(255, 90, 90)
-			else Color3.fromRGB(255, 225, 90)
-		local prefix = if burstName then burstName .. " " elseif crit then "CRITICAL " else ""
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextColor3 = if burstName then Color3.fromRGB(205, 130, 255)
+			elseif crit then Color3.fromRGB(255, 150, 60)
+			elseif mode == "boss" then Color3.fromRGB(255, 100, 100)
+			else Color3.new(1, 1, 1)
+		local prefix = if burstName then burstName .. " " elseif crit then "CRIT " else ""
 		label.Text = if mode == "boss"
 			then prefix .. "-" .. deps.formatNumber(amount) .. " 💥"
-			else prefix .. "+" .. deps.formatNumber(amount) .. " ⚡"
-		label.ZIndex = 2 -- above the HUD (1), below open panels (3)
-		label.Position = UDim2.fromOffset(-500, -500) -- off-screen until the first frame positions it
-		label.Visible = false
-		label.Parent = screenGui
-		-- Start at chest height, spread sideways, so numbers rise beside the character rather than
-		-- behind the HUD banners at the top of the screen.
-		table.insert(popups, { label = label, offset = Vector3.new(math.random(-25, 25) / 10, 1, 0), born = os.clock() })
+			else prefix .. "+" .. deps.formatNumber(amount)
+		label.ZIndex = 2
+		label.Parent = frame
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = INK
+		stroke.Thickness = big and 3 or 2.5
+		stroke.Parent = label
+		table.insert(popups, { frame = frame, scale = scale, icon = icon, label = label, stroke = stroke, big = big,
+			side = (math.random() * 2 - 1), lift = 0.6 + math.random() * 0.8, born = os.clock() })
 	end
 	RunService.RenderStepped:Connect(function()
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -130,17 +154,23 @@ function ClickFeel.Start(deps)
 			local pop = popups[i]
 			local t = (os.clock() - pop.born) / POP_LIFE
 			if t >= 1 or not root then
-				pop.label:Destroy()
+				pop.frame:Destroy()
 				table.remove(popups, i)
 			else
-				local rise = 2 * (1 - (1 - t) ^ 2) -- ease-out
-				local world = root.Position + camera.CFrame.RightVector * pop.offset.X + Vector3.new(0, pop.offset.Y + rise, 0)
+				-- Arc: out to one side while rising, then easing down a little.
+				local out = pop.side * 3.2 * (1 - (1 - t) ^ 2)
+				local up = pop.lift + 3.4 * t - 1.4 * t * t
+				local world = root.Position + camera.CFrame.RightVector * out + Vector3.new(0, up, 0)
 				local screen, onScreen = camera:WorldToViewportPoint(world)
-				pop.label.Visible = onScreen
+				pop.frame.Visible = onScreen
 				local inset = if screenGui.IgnoreGuiInset then 0 else GuiService:GetGuiInset().Y
-				pop.label.Position = UDim2.fromOffset(screen.X, screen.Y - inset)
-				pop.label.TextTransparency = t ^ 2
-				pop.label.TextStrokeTransparency = 0.2 + 0.8 * t ^ 2
+				pop.frame.Position = UDim2.fromOffset(screen.X, screen.Y - inset)
+				-- Pop in (overshoot), then settle; fade over the last 40%.
+				pop.scale.Scale = if t < 0.15 then 0.3 + (t / 0.15) * 0.95 elseif t < 0.25 then 1.25 - (t - 0.15) * 2.5 else 1
+				local fade = math.clamp((t - 0.6) / 0.4, 0, 1)
+				pop.label.TextTransparency = fade
+				pop.stroke.Transparency = fade
+				pop.icon.ImageTransparency = fade
 			end
 		end
 	end)

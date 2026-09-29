@@ -54,10 +54,7 @@ local function label(p,text,opts)
  CollectionService:AddTag(a,'FloatingLabel')
  return a
 end
-local function short(n)
- for _,u in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=u[1] then return (string.format('%.1f',n/u[1]):gsub('%.0$',''))..u[2] end end
- return tostring(n)
-end
+local short=require(game.ReplicatedStorage.Modules.NumberFormat).Short
 local function invisible(p) p.Transparency=1 p.CanCollide=false p.CanQuery=false return p end
 local function prompt(parent,action,object,distance)
  local pr=Instance.new('ProximityPrompt') pr.ActionText=action pr.ObjectText=object or ''
