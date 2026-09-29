@@ -1340,6 +1340,8 @@ local function celebrate(rarity)
 end
 -- Eggs: floating pedestal eggs, the proximity egg UI and the hatch animation.
 require(script.EggPedestals).Start()
+-- World signs as floating cartoon lettering (see MapBuilder label()).
+require(script.FloatingLabels).Start()
 eggController=require(script.EggInteractionController).Start({
  getData=function() return currentData end,
  dataChanged=DataUpdatedRemote,

@@ -36,33 +36,25 @@ local function part(parent,name,size,pos,color,material)
  local p=Instance.new('Part') p.Name=name p.Size=size p.Position=pos p.Color=color
  p.Material=material or Enum.Material.SmoothPlastic p.Anchored=true p.TopSurface=Enum.SurfaceType.Smooth p.Parent=parent return p
 end
-local function label(p,text,maxDistance)
- local gui=Instance.new('BillboardGui') gui.Size=UDim2.fromOffset(210,56) gui.StudsOffset=V(0,5,0) gui.MaxDistance=maxDistance or 95 gui.Parent=p
- local t=Instance.new('TextLabel') t.Size=UDim2.fromScale(1,1) t.BackgroundTransparency=1 t.Text=text
- t.Font=Enum.Font.FredokaOne t.TextScaled=true t.TextColor3=C(255,255,255) t.TextStrokeColor3=C(25,44,62) t.TextStrokeTransparency=0 t.Parent=gui
- return gui
+-- World signs: a tagged anchor that every client turns into floating 3D cartoon lettering
+-- (Client/FloatingLabels.lua), hidden behind buildings like any other object. Lines split on "\n":
+-- the first is big in `Color`, the second smaller in `SubColor`, any others small and pale.
+--   opts: Offset (studs above p), Color, SubColor, Size (first-line letter height, studs), MaxDistance
+local function label(p,text,opts)
+ opts=opts or {}
+ local a=Instance.new('Attachment') a.Name='FloatingLabel' a.Parent=p
+ a.WorldPosition=p.Position+(opts.Offset or V(0,5,0))
+ a:SetAttribute('Text',text)
+ a:SetAttribute('Color',opts.Color or C(255,255,255))
+ a:SetAttribute('SubColor',opts.SubColor or C(235,242,255))
+ a:SetAttribute('Size',opts.Size or 2)
+ a:SetAttribute('MaxDistance',opts.MaxDistance or 120)
+ CollectionService:AddTag(a,'FloatingLabel')
+ return a
 end
 local function short(n)
  for _,u in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=u[1] then return (string.format('%.1f',n/u[1]):gsub('%.0$',''))..u[2] end end
  return tostring(n)
-end
--- Price billboard over an egg pedestal: name, price with currency icon, and the Ascensions it needs.
-local function eggBillboard(p,egg,color,height)
- local gui=Instance.new('BillboardGui') gui.Name='EggBillboard' gui.Size=UDim2.fromOffset(190,84)
- gui.StudsOffset=V(0,height,0) gui.MaxDistance=110 gui.LightInfluence=0 gui.Parent=p
- local card=Instance.new('Frame') card.Size=UDim2.fromScale(1,1) card.BackgroundColor3=C(24,32,52) card.BackgroundTransparency=0.15 card.Parent=gui
- Instance.new('UICorner',card).CornerRadius=UDim.new(0,14)
- local stroke=Instance.new('UIStroke') stroke.Color=color stroke.Thickness=2.5 stroke.Parent=card
- local grad=Instance.new('UIGradient') grad.Rotation=90
- grad.Color=ColorSequence.new(C(255,255,255),C(190,200,220)) grad.Parent=card
- local function text(y,h,str,size,col)
-  local t=Instance.new('TextLabel') t.BackgroundTransparency=1 t.Position=UDim2.new(0,6,0,y) t.Size=UDim2.new(1,-12,0,h)
-  t.Font=Enum.Font.FredokaOne t.TextSize=size t.TextColor3=col t.Text=str t.TextStrokeTransparency=0.6 t.Parent=card
- end
- local currency=EggConfig.Currencies[egg.Currency] or EggConfig.Currencies.Coins
- text(4,30,egg.Name,24,color:Lerp(C(255,255,255),0.45))
- text(34,24,currency.Icon..' '..short(egg.Cost),21,C(255,226,110))
- text(58,20,egg.RequiredRebirths>0 and 'Needs '..egg.RequiredRebirths..' Ascension'..(egg.RequiredRebirths==1 and '' or 's') or 'Walk up to hatch!',14,C(200,214,235))
 end
 local function invisible(p) p.Transparency=1 p.CanCollide=false p.CanQuery=false return p end
 local function prompt(parent,action,object,distance)
@@ -145,6 +137,22 @@ function MapBuilder.Build()
   warn(('[MapBuilder] Imported world looks scaled: %s is %.0f studs from its design position. Re-import at scale 1.'):format(CHECK_NAME,off))
  end
 
+ -- The art's flat sign boards become floating lettering too. Egg boards go (each egg has its own
+ -- label with its price) and so does TRADING (the plaza is the Ascend altar, labelled ASCEND).
+ local SIGN_COLORS={['DAILY REWARDS']=C(255,190,70),['PET INDEX']=C(255,130,200),['UPGRADES']=C(110,230,140)}
+ for _,d in ipairs(world:GetChildren()) do
+  local text=d.Name:match('^SignPanel_(.+)$')
+  if text then
+   if SIGN_COLORS[text] then
+    local spot=invisible(part(interactive,'Sign_'..text,V(1,1,1),d.Position,C(255,255,255)))
+    label(spot,text,{Offset=V(0,2.2,0),Color=SIGN_COLORS[text],Size=2.4})
+   end
+   d:Destroy()
+  elseif d.Name:match('^SignText_') then
+   d:Destroy()
+  end
+ end
+
  -- Gates: each Barrier_<Zone> becomes the Ascension gate into that zone.
  local gates={}
  for i=2,#Config.Zones do
@@ -156,7 +164,8 @@ function MapBuilder.Build()
    barrier:SetAttribute('Zone',zone.Id) barrier:SetAttribute('ZoneName',zone.Name)
    barrier:SetAttribute('RequiredRebirths',zone.RequiredRebirths)
    local sign=invisible(part(gatesFolder,zone.Id..'GateSign',V(1,1,1),barrier.Position+V(0,barrier.Size.Y/2+5,0),ZONE_COLORS[zone.Id]))
-   label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' Ascension'..(zone.RequiredRebirths==1 and '' or 's'),160)
+   label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' ASCENSION'..(zone.RequiredRebirths==1 and '' or 'S'),
+    {Offset=V(0,0,0),Color=ZONE_COLORS[zone.Id],SubColor=C(255,214,90),Size=3.2,MaxDistance=220})
    table.insert(gates,barrier)
   else
    warn('[MapBuilder] Missing Barrier_'..zone.Id..' in the imported world; that zone has no gate.')
@@ -169,9 +178,9 @@ function MapBuilder.Build()
  local spawn=Instance.new('SpawnLocation') spawn.Name='MainSpawn' spawn.Size=V(10,0.5,10)
  spawn.Position=V(0,1.1,19) spawn.Transparency=1 spawn.Anchored=true spawn.Neutral=true spawn.Duration=0 spawn.CanCollide=false spawn.Parent=map
  local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,4.5,8),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
- label(orb,'CLICK TO EARN')
+ label(orb,'CLICK TO EARN',{Offset=V(0,4,0),Color=C(255,212,94),Size=1.5})
  local altar=part(interactive,'RebirthAltar',V(8,0.4,8),V(19,0.9,15),C(177,104,240),Enum.Material.Neon)
- label(altar,'ASCEND\nGems + permanent power')
+ label(altar,'ASCEND\nGEMS + PERMANENT POWER',{Color=C(190,120,255),SubColor=C(255,214,90),Size=2})
 
  -- Lobby stations: prompts in front of the art's buildings open their panels (see init.server.lua).
  local stations={}
@@ -179,11 +188,11 @@ function MapBuilder.Build()
   {kind='Shop',pos=V(24,2.5,5),action='Upgrades'},
   {kind='Pets',pos=V(0,2.5,-20),action='Pet Index'},
   {kind='Daily',pos=V(-24,2.5,5),action='Daily Rewards'},
-  {kind='TokenShop',pos=V(8,3,0),action='Boosts',sign='BOOSTS\nWishing fountain'},
+  {kind='TokenShop',pos=V(8,3,0),action='Boosts',sign='BOOSTS\nWISHING FOUNTAIN'},
  }) do
   local hit=invisible(part(interactive,s.kind..'Prompt',V(2,2,2),s.pos,C(255,255,255)))
   stations[s.kind]=prompt(hit,s.action)
-  if s.sign then label(hit,s.sign,90).StudsOffset=V(0,6,0) end
+  if s.sign then label(hit,s.sign,{Offset=V(0,8.5,0),Color=C(110,215,255),Size=1.9}) end
  end
 
  -- Egg pedestals: an invisible box around each egg, tagged EggPedestal with its EggId, carrying the
@@ -206,7 +215,10 @@ function MapBuilder.Build()
    if body and body:IsA('BasePart') then
     body.CanCollide=false body:SetAttribute('FloatingEgg',egg.Id)
    end
-   eggBillboard(p,egg,color,size.Y/2+3.2)
+   local currency=EggConfig.Currencies[egg.Currency] or EggConfig.Currencies.Coins
+   label(p,string.upper(egg.Name)..'\n'..short(egg.Cost)..' '..string.upper(currency.Name)
+    ..(egg.RequiredRebirths>0 and '\nNEEDS '..egg.RequiredRebirths..' ASCENSION'..(egg.RequiredRebirths==1 and '' or 'S') or ''),
+    {Offset=V(0,size.Y/2+2.8,0),Color=color,SubColor=C(255,214,90),Size=1.6})
    local sparkle=Instance.new('ParticleEmitter') sparkle.Texture='rbxasset://textures/particles/sparkles_main.dds'
    sparkle.Color=ColorSequence.new(color) sparkle.Size=NumberSequence.new(0.35,0)
    sparkle.Lifetime=NumberRange.new(0.6,1.2) sparkle.Rate=6 sparkle.Speed=NumberRange.new(0.5,1.5)
@@ -244,7 +256,8 @@ function MapBuilder.Build()
    m.Parent=zones
    local body=m.PrimaryPart or m:FindFirstChildWhichIsA('BasePart',true)
    body.CanCollide=true
-   label(body,boss.Name..'\n❤ '..short(boss.Health)..' HP',140).StudsOffset=V(0,newSize.Y/2+2,0)
+   label(body,boss.Name..'\n'..short(boss.Health)..' HP',{Offset=V(0,newSize.Y/2+2.5,0),Color=ZONE_COLORS[boss.Zone],
+    SubColor=C(255,110,120),Size=2.4,MaxDistance=170})
    bosses[boss.Id]={Model=m,Prompt=prompt(body,'Fight',boss.Name,22),Position=pos}
   end
  end
