@@ -1,0 +1,10 @@
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+/build
+/assets/monzter-pack
+
+# Blender art package (~75 MB of .blend/.zip/FBX); meshes are imported into the place instead.
+/art/
+__pycache__/

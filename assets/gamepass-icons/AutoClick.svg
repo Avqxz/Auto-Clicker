@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs>
+  <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+    <stop offset="0" stop-color="#7fd6ff"/><stop offset="1" stop-color="#1f6fe0"/>
+  </radialGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff3a8"/><stop offset="0.55" stop-color="#ffcc2e"/><stop offset="1" stop-color="#ff9d00"/>
+  </linearGradient>
+  <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<g opacity="0.16"><path d="M256,256 L676.0,256.0 L650.7,399.6 Z" fill="#ffffff"/><path d="M256,256 L577.7,526.0 L466.0,619.7 Z" fill="#ffffff"/><path d="M256,256 L328.9,669.6 L183.1,669.6 Z" fill="#ffffff"/><path d="M256,256 L46.0,619.7 L-65.7,526.0 Z" fill="#ffffff"/><path d="M256,256 L-138.7,399.6 L-164.0,256.0 Z" fill="#ffffff"/><path d="M256,256 L-138.7,112.4 L-65.7,-14.0 Z" fill="#ffffff"/><path d="M256,256 L46.0,-107.7 L183.1,-157.6 Z" fill="#ffffff"/><path d="M256,256 L328.9,-157.6 L466.0,-107.7 Z" fill="#ffffff"/><path d="M256,256 L577.7,-14.0 L650.7,112.4 Z" fill="#ffffff"/></g>
+<circle cx="256" cy="256" r="236" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="6"/>
+<path d="M132.0,168.9 A132,132 0 0 1 357.1,129.2" fill="none" stroke="#1b2340" stroke-width="34" stroke-linecap="round"/><path d="M132.0,168.9 A132,132 0 0 1 357.1,129.2" fill="none" stroke="#ffd24a" stroke-width="18" stroke-linecap="round"/><path d="M377.0,112.4 L376.4,152.1 L337.2,145.9 Z" fill="#ffd24a" stroke="#1b2340" stroke-width="12" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke"/>
+<path d="M380.0,259.1 A132,132 0 0 1 154.9,298.8" fill="none" stroke="#1b2340" stroke-width="34" stroke-linecap="round"/><path d="M380.0,259.1 A132,132 0 0 1 154.9,298.8" fill="none" stroke="#ffd24a" stroke-width="18" stroke-linecap="round"/><path d="M135.0,315.6 L135.6,275.9 L174.8,282.1 Z" fill="#ffd24a" stroke="#1b2340" stroke-width="12" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke"/>
+<g transform="translate(218,108) scale(2.1)">
+  <path d="M0,0 L0,72 L18,56 L30,82 L43,76 L31,50 L53,50 Z" fill="#ffffff" stroke="#1b2340" stroke-width="5.5" stroke-linejoin="round" paint-order="stroke"/>
+  <path d="M5,10 L5,55 L16,45" fill="none" stroke="#cfe9ff" stroke-width="4" stroke-linecap="round"/>
+</g>
+<text x="256" y="452" text-anchor="middle" font-family="'Arial Rounded MT Bold', 'Arial Black', sans-serif" font-size="88" font-weight="900" fill="url(#gold)" stroke="#1b2340" stroke-width="16" stroke-linejoin="round" paint-order="stroke" letter-spacing="2">AUTO</text></svg>
