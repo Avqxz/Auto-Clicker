@@ -10,12 +10,18 @@ local function format(n)
  for _,unit in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=unit[1] then return string.format('%.1f%s',n/unit[1],unit[2]) end end
  return tostring(math.floor(n))
 end
-function Boards.Start(PlayerData)
+-- spots: optional { CFrame, CFrame } for the two boards (their front, -Z, is the readable side).
+function Boards.Start(PlayerData, spots)
  local folder=Instance.new('Folder') folder.Name='GlobalLeaderboards' folder.Parent=workspace.Map
  local rows={}
  for index,title in ipairs({'GLOBAL ASCENSIONS','GLOBAL LIFETIME POWER'}) do
-  local board=Instance.new('Part') board.Name=title board.Size=Vector3.new(27,19,1)
-  board.Position=Vector3.new(index==1 and -32 or 32,12,76) board.Anchored=true
+  local board=Instance.new('Part') board.Name=title
+  if spots and spots[index] then
+   board.Size=Vector3.new(10,8,0.4) board.CFrame=spots[index]
+  else
+   board.Size=Vector3.new(27,19,1) board.Position=Vector3.new(index==1 and -32 or 32,12,76)
+  end
+  board.Anchored=true
   board.Material=Enum.Material.Slate board.Color=Color3.fromRGB(25,39,59) board.Parent=folder
   local gui=Instance.new('SurfaceGui') gui.Face=Enum.NormalId.Front gui.CanvasSize=Vector2.new(700,500) gui.Parent=board
   local header=Instance.new('TextLabel') header.Size=UDim2.new(1,0,0,70) header.BackgroundColor3=Color3.fromRGB(0,179,219)

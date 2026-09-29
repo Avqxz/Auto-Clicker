@@ -19,8 +19,8 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Auto-clickers** — spend Power on passive generators that earn Power every second, even between clicks (also boosted by equipped pets).
 - **Ascension** — reset Power, Coins, upgrades, auto-clickers and click power for a permanent power multiplier, an extra pet-equip slot, and **Gems** (more if you overshoot the requirement). Pets, gear, skills, Gems, Tokens and Essence are kept. Each Ascension also opens the next zone gate. The Ascend panel previews the Gems, the multiplier change and what unlocks. (Stored as `RebirthCount` in saves.)
 - **Skill tree** — permanent nodes bought with Gems in three branches: Power (Click Mastery, Crit Mastery, Mega Crits, Combo Boost), Automation (Auto Power, Offline Earnings, Head Start) and Luck (Egg Luck, Pet Slots, Golden Touch). Later nodes need their branch's first node.
-- **Bosses** — each zone has a boss at its far end (Mossback, Frost Golem, Magma King, Gummy Tyrant, Void Titan). A Fight prompt starts a personal 60-second fight: your clicks damage the boss (same power/combo/crit math) instead of earning coins. Wins pay coins, Gems and a guaranteed gear drop; short cooldowns after wins and losses.
-- **Equipment** — Gloves / Aura / Core / Artifact slots (GEAR tab). Each boss drops one of four themed pieces, Common (Forest) up to Mythic (Space), adding click power, crit chance/damage or auto income; Ember Idol and Quantum Gloves add a burst (every 100th click x5 / x10). Up to 40 pieces in the bag; Discard needs a second tap.
+- **Bosses** — each biome island has a boss, a giant version of its Legendary pet (Stag King, Great Sphinx, Aurora Owl, Crystal Deer, Phoenix Lord, Cake Dragon, Celestial Dragon). A Fight prompt starts a personal 60-second fight: your clicks damage the boss (same power/combo/crit math) instead of earning coins. Wins pay coins, Gems and a guaranteed gear drop; short cooldowns after wins and losses.
+- **Equipment** — Gloves / Aura / Core / Artifact slots (GEAR tab). Each boss drops one of four themed pieces, Common (Grasslands) up to Mythic (Celestial), adding click power, crit chance/damage or auto income; Ember Idol and Quantum Gloves add a burst (every 100th click x5 / x10). Up to 40 pieces in the bag; Discard needs a second tap.
 - **Daily rewards** — a 7-day login streak (Gems and Coins; 40 Gems + 10 Tokens on day 7); missing a day restarts it. The calendar opens by itself when a reward is ready.
 - **Quests** — 3 daily and 3 weekly quests (clicks, hatches, bosses, combos, Ascensions, upgrades, Legendary hatches) paying Gems; the same set for everyone each UTC day/week. QUESTS/DAILY buttons show a red dot when something can be claimed.
 - **Offline earnings** — auto-clickers keep earning 5% of their rate while you're away (8h max, more with the Offline Earnings skill), shown in a Welcome Back panel.
@@ -29,14 +29,15 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Leaderboard** — Power and Ascensions show up in Roblox's built-in leaderboard (`leaderstats`).
 - **Persistent saves** — data is loaded on join, saved every 60 seconds, and saved again on leave/server shutdown.
 - **Server-authoritative** — all coin/currency/pet changes happen on the server; the client only sends intent (click, hatch, equip, fuse), with a click-rate cooldown to prevent spam exploits.
-- **Five linked biome zones** — Forest (spawn, clickable orb, Rebirth shrine, Basic Egg), Ice World, Lava World, Candy World and Space World, laid out in a line and connected by walkways. Each walkway ends in a gate that needs 1 / 2 / 3 / 5 rebirths; gates are opened per player on the client, so each player only passes the ones they've unlocked. Every zone has its own egg, which must be hatched in person. The map is flattened to a smooth cartoon SmoothPlastic look. Forest/Ice/Lava come from JTea's free simulator pack and Candy/Space from free Creator Store maps — see [ASSETS.md](ASSETS.md). The in-world orb/eggs/altar are also directly clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
-- **Cube pets** — every pet is a cartoon cube critter built in code (`PetModelFactory.lua`): big blocky head, cube feet, a cute face (big eyes with highlights, smile, blush) and species parts — cat, dog, bunny, fox, bear, dragon (wings, horns), bird, unicorn, golem, alien — in its own colors. Legendary/Mythic accents glow, Mythic and Golden pets sparkle, and Golden pets turn gold. The same models orbit players, show as panel icons and spin in the hatch reveal.
+- **Lobby + seven biome islands** — the Blender art package's world (see [ASSETS.md](ASSETS.md)): a lobby (spawn, click orb, Ascend altar on the trading plaza, Upgrades / Pet Index / Daily Rewards buildings, Boosts fountain, leaderboards, Starter Egg) and Grasslands, Desert, Ice Peaks, Enchanted Forest, Volcano, Candy Land and Celestial Heaven, joined by bridges. Each bridge's gate needs 1 / 2 / 3 / 4 / 5 / 6 / 8 Ascensions and is opened per player on the client. Every island has its own egg (hatched in person) and a boss. The in-world orb/eggs/altar are also clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
+- **Pets** — 49 pets from the art package, seven per biome (Common, Rare, Epic, Legendary, Secret/Mythic), plus older pets kept for existing saves. Imported pet models (`ReplicatedStorage.ArtPets`) and their rendered icons are used where present; otherwise `PetModelFactory.lua` builds a cartoon cube pet in the biome's colors. Legendary/Mythic accents glow, Mythic and Golden pets sparkle, Golden pets turn gold.
 
 - **Store (gamepasses & developer products)** — Auto Click (AUTO toggle), Triple Hatch (x3 button), +3 Pet Equip, Lucky (x1.5 egg luck), Fast Hatch (half cooldown) and VIP (+10% Power and Coins, [VIP] chat tag, +5 Gems per daily reward, sparkle aura); plus 2x Power / 2x Luck (15 min), Instant Boss Retry and a 25-Token pack. All convenience; nothing is required to progress. **IDs start at 0 (hidden from players)** — see "Setting up monetization" below.
 
-Not implemented (possible extensions): hand-authored mesh/asset pets (pets
-are simple primitive-part builds), an Aura/dice gacha system, trading, a
-battle pass, limited-time events and an hourly global boss.
+Not implemented (possible extensions): the art package's pet variants
+(Rainbow, Shiny, Void, Crystal), an Aura/dice gacha system, trading (the
+lobby's trading plaza hosts the Ascend altar for now), a battle pass,
+limited-time events and an hourly global boss.
 
 ## Setting up monetization
 
@@ -64,11 +65,11 @@ Roblox games in a text editor / git repo and sync them into Roblox Studio.
 default.project.json                                  # Rojo project definition
 src/
   ReplicatedStorage/Modules/GameConfig.lua             # Shared config: upgrades, auto-clickers, eggs/pets, rebirth math
-  ReplicatedStorage/Modules/PetModelFactory.lua        # Builds the cartoon cube pet models (server + client)
+  ReplicatedStorage/Modules/PetModelFactory.lua        # Builds pet models: imported art pets, or cartoon cube pets (server + client)
+  ReplicatedStorage/Modules/ArtLook.lua                # Colors imported art models from ArtMaterials.lua (generated)
   ServerScriptService/Server/init.server.lua           # Server bootstrap: remotes, click/purchase/hatch/equip/fuse/rebirth handling, autosave
   ServerScriptService/Server/PlayerData.lua             # DataStore load/save/cache module
-  ServerScriptService/Server/MapBuilder.lua             # Builds the five biome zones, walkways, rebirth gates, lighting and interactives
-  ServerScriptService/Server/AssetScenery.lua           # Scatters optional prop assets (trees, rocks, bushes) along the zone edges
+  ServerScriptService/Server/MapBuilder.lua             # Places the imported art world and wires gates, eggs, stations, bosses and lighting
   ServerScriptService/Server/PetFollowers.lua           # Spawns/animates the equipped pets that orbit each player
   ServerScriptService/Server/Quests.lua                 # Daily/weekly quest progress and the daily login reward
   ServerScriptService/Server/Monetization.lua           # Gamepass ownership, VIP aura, developer product receipts
@@ -84,6 +85,7 @@ src/
   StarterPlayer/StarterPlayerScripts/Client/Counter.lua      # Animated number labels
   StarterPlayer/StarterPlayerScripts/Client/MusicPlayer.lua  # Background music playlist and 🎵 mute button
   StarterPlayer/StarterPlayerScripts/Client/StoreUI.lua      # Shopping-cart STORE button + panel, AUTO click toggle, [VIP] chat tag
+tools/art/                                            # Art-package import: FBX reader/fixer, Open Cloud uploader, material generator (see ASSETS.md)
 ```
 
 ## Running it in Roblox Studio
@@ -119,12 +121,5 @@ client so the UI always reflects the same numbers the server enforces.
 
 ## Credits
 
-- "Simulator Model Pack" by MonzterDev — http://monzter.dev/ (Ascend building, zone-gate arches,
-  treasure chest, enchanting table, clouds). The model files are **not** in this repo: the license
-  forbids redistributing them. To rebuild locally, download the pack from
-  https://monzter.dev/assets/clicking-simulator-model-pack/ and put its `.rbxm` files in
-  `assets/monzter-pack/` (git-ignored); Rojo syncs them into `ServerStorage.MonzterPack`. Without
-  them the game falls back to its built-in look. The license also asks for this credit wherever you
-  post about the game (e.g. its description or a DevForum post).
-- Map biomes: JTea's free simulator pack and free Creator Store maps (see ASSETS.md).
+- World, eggs and pets: the Clicking Simulator Blender art package in `art/` (git-ignored; see ASSETS.md).
 - Music: Roblox's licensed APM music library.

@@ -87,8 +87,19 @@ local function getClickPower(data)
 	return GameConfig.GetClickPower(data, getEquippedPets(data))
 end
 
--- Builds a small 3D preview of a pet model inside a ViewportFrame.
+-- Builds a small pet picture: the art package's rendered icon when the pet has one (tinted gold for
+-- Golden pets), otherwise a 3D preview of its model inside a ViewportFrame.
 local function createPetViewport(petData)
+	local art = GameConfig.PetArt[petData.Name]
+	if art and art.Icon then
+		local icon = Instance.new("ImageLabel")
+		icon.BackgroundTransparency = 1
+		icon.Image = art.Icon
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.ImageColor3 = if petData.Golden then Color3.fromRGB(255, 214, 90) else Color3.new(1, 1, 1)
+		return icon
+	end
+
 	local viewportFrame = Instance.new("ViewportFrame")
 	viewportFrame.BackgroundTransparency = 1
 	viewportFrame.Ambient = Color3.fromRGB(150, 150, 150)
@@ -1368,7 +1379,7 @@ objective.Font=Enum.Font.FredokaOne objective.TextSize=17 objective.TextWrapped=
 objective.Parent=screenGui Instance.new("UICorner",objective).CornerRadius=UDim.new(0,10)
 local function nextGoal(data)
  if not next(data.UpgradeLevels) then objective.Text="FIRST GOAL • Buy Better Clicks for 10 Power"
- elseif #data.Pets==0 then objective.Text="NEXT • SELL Power for Coins, then hatch a Basic Egg ("..GameConfig.Eggs[1].Cost.." Coins)"
+ elseif #data.Pets==0 then objective.Text="NEXT • SELL Power for Coins, then hatch a Starter Egg ("..GameConfig.Eggs[1].Cost.." Coins)"
  elseif not next(data.AutoClickerLevels) then objective.Text="NEXT • Buy a Clicking Bot for 25 Power"
  else objective.Text="ASCEND • "..formatNumber(data.Power).." / "..formatNumber(GameConfig.GetRebirthRequirement(data.RebirthCount)).." Power" end
 end

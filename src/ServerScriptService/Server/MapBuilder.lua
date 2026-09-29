@@ -1,20 +1,34 @@
--- Builds the world: biome zones in a line along -Z, linked by walkways, each walkway ending in a
--- rebirth gate. Forest/Ice/Lava come from JTea's free simulator pack; Candy/Space are free
--- Creator Store maps saved in ServerStorage.ZoneMaps (see ASSETS.md).
+-- Builds the world from the Blender art package (art/, see ASSETS.md): the imported World_Assembled
+-- model (ServerStorage.ArtPack.World) holds the lobby, seven biome islands, bridges, gates and egg
+-- stands in their designed positions. This script lines that model up with the coordinates below and
+-- wires gameplay onto its named pieces:
+--   Barrier_<Zone>  -> the Ascension gate into <Zone> (solid until unlocked, see Client/ZoneGates.lua)
+--   EggBody_<Zone>  -> that zone's egg (EggBody_Lobby is the Starter Egg)
+-- plus the lobby stations (Upgrades / Pet Index / Daily Rewards houses, fountain, trading plaza),
+-- spawn, click orb and one boss per biome.
 local Config=require(game.ReplicatedStorage.Modules.GameConfig)
 local PetModelFactory=require(game.ReplicatedStorage.Modules.PetModelFactory)
+local ArtLook=require(game.ReplicatedStorage.Modules.ArtLook)
 local MapBuilder={}
 local V=Vector3.new local C=Color3.fromRGB
-local GAP=30 -- walkway length between one zone's outer edge and the next
 
--- Where each zone's map comes from, which part/model is its floor, and its egg/gate color.
-local SOURCES={
- Forest={pack=true,floor='Texture Part',color=C(92,233,236)},
- Ice={pack=true,floor='Floor',color=C(120,200,255)},
- Lava={pack=true,floor='Lava Ground',color=C(255,120,40)},
- Candy={floor='Baseplate',color=C(255,120,200)},
- Space={floor='Basic Floor',color=C(150,110,255)},
+-- Island centers (walkable surface height) and radii, from the art's build script (Blender (x,y,z)
+-- -> Roblox (x, z, -y)).
+local ISLANDS={
+ Lobby={center=V(0,0,0),radius=38},
+ Grasslands={center=V(0,2,-95),radius=34},
+ Desert={center=V(90,8,-155),radius=37},
+ Ice={center=V(190,12,-120),radius=37},
+ Enchanted={center=V(270,20,-205),radius=39},
+ Volcano={center=V(215,24,-305),radius=39},
+ Candy={center=V(105,34,-338),radius=37},
+ Celestial={center=V(-10,48,-290),radius=40},
 }
+-- Where two pieces sit in the design; used to line the imported model up.
+local ANCHOR_NAME,ANCHOR_POS='Barrier_Grasslands',V(0,5.3,-49.5)
+local CHECK_NAME,CHECK_POS='EggBody_Celestial',V(-23,53.2,-285)
+local ZONE_COLORS={Lobby=C(92,233,236),Grasslands=C(120,220,90),Desert=C(255,190,80),Ice=C(120,200,255),
+ Enchanted=C(200,120,255),Volcano=C(255,110,40),Candy=C(255,120,200),Celestial=C(255,225,120)}
 
 local function part(parent,name,size,pos,color,material)
  local p=Instance.new('Part') p.Name=name p.Size=size p.Position=pos p.Color=color
@@ -26,270 +40,175 @@ local function label(p,text,maxDistance)
  t.Font=Enum.Font.FredokaOne t.TextScaled=true t.TextColor3=C(255,255,255) t.TextStrokeColor3=C(25,44,62) t.TextStrokeTransparency=0 t.Parent=gui
  return gui
 end
-local function place(template,parent,name,pos,height)
- local m=template:Clone() m.Name=name m.Parent=parent
- if height then local _,size=m:GetBoundingBox() m:ScaleTo(m:GetScale()*height/size.Y) end
- local cf,size=m:GetBoundingBox()
- m:PivotTo(CFrame.new(pos+V(0,size.Y/2,0))*cf:Inverse()*m:GetPivot())
- for _,d in ipairs(m:GetDescendants()) do
-  if d:IsA('BasePart') then d.Anchored=true
-  elseif d:IsA('LuaSourceContainer') then d:Destroy() end
- end
- return m
-end
--- Optional MonzterDev "Simulator Model Pack" (ServerStorage.MonzterPack; git-ignored, see README).
--- Returns nil when the pack or model is missing, so callers keep their fallback. Scales to a target
--- height or X-width, turns by yaw degrees, and rests the model's lowest point on pos.Y.
--- Turn angles are in one table so they're easy to adjust.
-local PACK_YAW={RebirthShop=-90,PortalWorld=0,GroupChest=180,EnchantingTable=180,Cloud=0}
-local function packModel(name,key,parent,newName,pos,opts)
- local pack=game.ServerStorage:FindFirstChild('MonzterPack')
- local template=pack and pack:FindFirstChild(name)
- if not template then return nil end
- local m=template:Clone()
- if not m:IsA('Model') then
-  local wrapper=Instance.new('Model') m.Parent=wrapper m=wrapper
- end
- m.Name=newName
- for _,d in ipairs(m:GetDescendants()) do
-  if d:IsA('LuaSourceContainer') then d:Destroy()
-  elseif d:IsA('BasePart') then d.Anchored=true if opts.decor then d.CanCollide=false d.CanQuery=false end end
- end
- m.Parent=parent
- local _,size=m:GetBoundingBox()
- local scale=if opts.height then opts.height/size.Y elseif opts.width then opts.width/size.X else 1
- m:ScaleTo(m:GetScale()*scale)
- local center=m:GetBoundingBox()
- m:PivotTo(CFrame.new(pos)*CFrame.Angles(0,math.rad(PACK_YAW[key] or 0),0)*center:Inverse()*m:GetPivot())
- local cf,newSize=m:GetBoundingBox()
- m:PivotTo(m:GetPivot()+V(0,pos.Y-(cf.Position.Y-newSize.Y/2),0))
- return m
-end
-
-local function bounds(x)
- if x:IsA('Model') then return x:GetBoundingBox() end
- return x.CFrame,x.Size
-end
 local function short(n)
  for _,u in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=u[1] then return (string.format('%.1f',n/u[1]):gsub('%.0$',''))..u[2] end end
  return tostring(n)
 end
-
--- Removes zone scenery that rises above the floor inside `size` around `cf` (walkway corridors,
--- egg spots). Whole small models (a tree, a rock) go at once; big ones only lose the parts in the way.
-local function clearBox(zoneModels,cf,size)
- local params=OverlapParams.new() params.FilterType=Enum.RaycastFilterType.Include params.FilterDescendantsInstances=zoneModels
- for _,p in ipairs(workspace:GetPartBoundsInBox(cf,size,params)) do
-  if p.Parent and p.Position.Y+p.Size.Y/2>2 and not p:GetAttribute('ZoneFloor') then
-   local zone,target=nil,p
-   for _,z in ipairs(zoneModels) do if p:IsDescendantOf(z) then zone=z end end
-   local a=p.Parent
-   while zone and a and a~=zone do
-    if a:IsA('Model') then local _,s=a:GetBoundingBox() if math.max(s.X,s.Z)<60 then target=a end end
-    a=a.Parent
-   end
-   target:Destroy()
-  end
- end
+local function invisible(p) p.Transparency=1 p.CanCollide=false p.CanQuery=false return p end
+local function prompt(parent,action,object,distance)
+ local pr=Instance.new('ProximityPrompt') pr.ActionText=action pr.ObjectText=object or ''
+ pr.HoldDuration=0 pr.MaxActivationDistance=distance or 14 pr.RequiresLineOfSight=false pr.Parent=parent
+ return pr
 end
 
--- Clones a zone map, sets its floor top to y=1 centered on x=0, and returns it with its floor bounds.
-local function loadZone(library,zoneMaps,zone,parent)
- local src=SOURCES[zone.Id]
- local template
- if src.pack then template=library[zone.Id].Map:GetChildren()[1]
- else template=assert(zoneMaps and zoneMaps:FindFirstChild(zone.Id),'Missing ServerStorage.ZoneMaps.'..zone.Id..' (see ASSETS.md)') end
- local m=template:Clone() m.Name=zone.Id m.Parent=parent
- for _,d in ipairs(m:GetDescendants()) do
-  if d:IsA('LuaSourceContainer') or d:IsA('SpawnLocation') then d:Destroy()
-  elseif d:IsA('BasePart') then d.Anchored=true end
+-- Finds the imported world in ServerStorage.ArtPack (named World or World_Assembled, or its only model).
+local function findWorldTemplate()
+ local pack=game.ServerStorage:FindFirstChild('ArtPack')
+ if not pack then return nil end
+ local world=pack:FindFirstChild('World') or pack:FindFirstChild('World_Assembled')
+ if not world then
+  for _,c in ipairs(pack:GetChildren()) do if c:IsA('Model') then world=c break end end
  end
- local floor
- for _,d in ipairs(m:GetDescendants()) do
-  if d.Name==src.floor and (d:IsA('BasePart') or d:IsA('Model')) then
-   local cf,s=bounds(d) if not floor or cf.Position.Y<floor.cf.Position.Y then floor={inst=d,cf=cf,size=s} end
+ return world
+end
+
+-- Turns and moves `model` so its pieces ANCHOR_NAME and CHECK_NAME sit at their design positions.
+-- The yaw matters: Open Cloud imports come in turned 180 degrees from the 3D Importer's. Returns the
+-- distance left between CHECK_NAME and CHECK_POS (large if the import was scaled), or nil if a piece is missing.
+local function alignWorld(model)
+ local anchor=model:FindFirstChild(ANCHOR_NAME,true)
+ local check=model:FindFirstChild(CHECK_NAME,true)
+ if not (anchor and anchor:IsA('BasePart') and check and check:IsA('BasePart')) then return nil end
+ local function yawOf(v) return math.atan2(v.X,v.Z) end
+ local turn=yawOf(CHECK_POS-ANCHOR_POS)-yawOf(check.Position-anchor.Position)
+ local around=CFrame.new(anchor.Position)
+ model:PivotTo(around*CFrame.Angles(0,turn,0)*around:Inverse()*model:GetPivot())
+ model:PivotTo(model:GetPivot()+(ANCHOR_POS-anchor.Position))
+ return (check.Position-CHECK_POS).Magnitude
+end
+
+-- A clear spot for a boss on an island: tries points around the center until a box above the ground
+-- is free of scenery (ignoring flat pieces like the ground, paths and ponds).
+local function findClearSpot(island,avoid,size)
+ local params=OverlapParams.new() params.FilterType=Enum.RaycastFilterType.Include params.FilterDescendantsInstances=avoid
+ for _,r in ipairs({14,18,22,10,26}) do
+  for i=0,11 do
+   local a=math.rad(i*30+15)
+   local pos=island.center+V(math.cos(a)*r,0,math.sin(a)*r)
+   local clear=true
+   for _,p in ipairs(workspace:GetPartBoundsInBox(CFrame.new(pos+V(0,size.Y/2+1.5,0)),size,params)) do
+    if p.Position.Y+p.Size.Y/2>island.center.Y+1.5 then clear=false break end
+   end
+   if clear then return pos end
   end
  end
- assert(floor,'No floor "'..src.floor..'" in zone '..zone.Id)
- if floor.inst:IsA('BasePart') then floor.inst:SetAttribute('ZoneFloor',true) end
- for _,d in ipairs(floor.inst:GetDescendants()) do if d:IsA('BasePart') then d:SetAttribute('ZoneFloor',true) end end
- local top=floor.cf.Position.Y+floor.size.Y/2
- m:PivotTo(m:GetPivot()+V(-floor.cf.Position.X,1-top,-floor.cf.Position.Z))
- return m,floor.size
+ return island.center+V(0,0,island.radius*0.4)
 end
 
 function MapBuilder.Build()
- local pack=game.ServerStorage:FindFirstChild('JTeaSimulatorPack')
- assert(pack,'Import the free JTea pack 7151365600 into ServerStorage as JTeaSimulatorPack (see ASSETS.md).')
- local library=pack:GetChildren()[1]:GetChildren()[1]
- local zoneMaps=game.ServerStorage:FindFirstChild('ZoneMaps')
+ local template=findWorldTemplate()
+ assert(template,'Import the art package world first: World_Assembled.fbx into ServerStorage.ArtPack (see ASSETS.md).')
  local old=workspace:FindFirstChild('Map') if old then old:Destroy() end
  local map=Instance.new('Folder') map.Name='Map' map.Parent=workspace
  local zones=Instance.new('Folder') zones.Name='Zones' zones.Parent=map
  local interactive=Instance.new('Folder') interactive.Name='Interactives' interactive.Parent=map
  local gatesFolder=Instance.new('Folder') gatesFolder.Name='Gates' gatesFolder.Parent=map
 
- -- Lay the zones out in a line: each zone's outer edge sits GAP studs past the previous one's.
- local placed={} -- {zone, model, floorSize, center}
- local prevMinZ
- for i,zone in ipairs(Config.Zones) do
-  local m,floorSize=loadZone(library,zoneMaps,zone,zones)
-  local cf,size=m:GetBoundingBox()
-  local shift=0
-  if prevMinZ then shift=(prevMinZ-GAP)-(cf.Position.Z+size.Z/2) end
-  m:PivotTo(m:GetPivot()+V(0,0,shift))
-  prevMinZ=cf.Position.Z+shift-size.Z/2
-  placed[i]={zone=zone,model=m,floorSize=floorSize,center=V(0,1,shift)}
- end
-
- -- Walkways between consecutive floors, with the scenery in their way cleared.
- local walkways={}
- for i=2,#placed do
-  local a,b=placed[i-1],placed[i]
-  local fromZ=a.center.Z-a.floorSize.Z/2 local toZ=b.center.Z+b.floorSize.Z/2
-  local midZ=(fromZ+toZ)/2 local length=fromZ-toZ
-  clearBox({a.model,b.model},CFrame.new(0,40,midZ),V(30,78,length+6))
-  walkways[i]={midZ=midZ,length=length,entranceZ=toZ}
- end
-
- -- Forest (starting zone) extras: smooth ground under and around it, side hills, and props.
- workspace.Terrain:FillBlock(CFrame.new(0,-8,0),V(280,24,280),Enum.Material.Air) -- clear terrain from older builds
- part(zones,'Ground',V(258,4,258),V(0,-1.5,0),C(112,214,92))
- for _,side in ipairs({-1,1}) do for i=1,5 do
-  local hill=part(zones,'Hill',V(30,30,30),V(side*122,-8,-95+i*36),C(86,190,78)) hill.Shape=Enum.PartType.Ball
- end end
- require(script.Parent.AssetScenery).Build(map)
-
- -- Cartoon pass: flat SmoothPlastic with slightly punchier colors on everything but glowing/glass effects.
- for _,d in ipairs(map:GetDescendants()) do
-  if d:IsA('BasePart') and d.Material~=Enum.Material.Neon and d.Material~=Enum.Material.Glass and d.Material~=Enum.Material.ForceField then
-   d.Material=Enum.Material.SmoothPlastic d.Reflectance=0
-   local h,s,v=d.Color:ToHSV()
-   if s>0.08 then d.Color=Color3.fromHSV(h,math.min(1,s*1.25),math.min(1,v*1.08)) end
+ -- The world: anchored, scripts stripped, small decorations non-colliding.
+ local world=template:Clone()
+ if not world:IsA('Model') then local w=Instance.new('Model') world.Parent=w world=w end
+ world.Name='World'
+ for _,d in ipairs(world:GetDescendants()) do
+  if d:IsA('LuaSourceContainer') then d:Destroy()
+  elseif d:IsA('BasePart') then
+   d.Anchored=true
+   local big=math.max(d.Size.X,d.Size.Y,d.Size.Z)
+   if big<3 and not d.Name:find('^Barrier') and not d.Name:find('Plank') then d.CanCollide=false end
   end
  end
+ world.Parent=zones
+ ArtLook.Apply(world,'World_Assembled')
+ local off=alignWorld(world)
+ if not off then
+  warn('[MapBuilder] '..ANCHOR_NAME..' or '..CHECK_NAME..' not found in the imported world; it is left where it was imported.')
+ elseif off>3 then
+  warn(('[MapBuilder] Imported world looks scaled: %s is %.0f studs from its design position. Re-import at scale 1.'):format(CHECK_NAME,off))
+ end
 
- -- Walkway decks and Ascension gates. Gates are solid on the server; each client makes the gates it
- -- has unlocked non-solid for its own character (see Client/ZoneGates.lua).
+ -- Gates: each Barrier_<Zone> becomes the Ascension gate into that zone.
  local gates={}
- for i=2,#placed do
-  local zone=placed[i].zone local w=walkways[i] local color=SOURCES[zone.Id].color
-  part(zones,'Walkway',V(24,2,w.length+4),V(0,0,w.midZ),C(240,226,204))
-  for _,side in ipairs({-1,1}) do part(zones,'WalkwayRail',V(1,2,w.length+4),V(side*12.5,2,w.midZ),C(255,255,255)) end
-  local gateZ=w.entranceZ+1.5
-  -- Pack portal arch around the gate if available (decor only: the gate part below does the blocking),
-  -- otherwise plain pillars and a lintel.
-  local arch=packModel('Portal World','PortalWorld',gatesFolder,zone.Id..'Arch',V(0,1,gateZ),{width=40,decor=true})
-  local signY=26
-  if arch then
-   local cf,size=arch:GetBoundingBox() signY=cf.Position.Y+size.Y/2+3
+ for i=2,#Config.Zones do
+  local zone=Config.Zones[i]
+  local barrier=world:FindFirstChild('Barrier_'..zone.Id,true)
+  if barrier and barrier:IsA('BasePart') then
+   barrier.Name=zone.Id..'Gate' barrier.Parent=gatesFolder
+   barrier.CanCollide=true barrier.Transparency=0.3
+   barrier:SetAttribute('Zone',zone.Id) barrier:SetAttribute('ZoneName',zone.Name)
+   barrier:SetAttribute('RequiredRebirths',zone.RequiredRebirths)
+   local sign=invisible(part(gatesFolder,zone.Id..'GateSign',V(1,1,1),barrier.Position+V(0,barrier.Size.Y/2+5,0),ZONE_COLORS[zone.Id]))
+   label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' Ascension'..(zone.RequiredRebirths==1 and '' or 's'),160)
+   table.insert(gates,barrier)
   else
-   for _,side in ipairs({-1,1}) do part(gatesFolder,'GatePillar',V(4,22,4),V(side*14,12,gateZ),C(255,255,255)) end
-   part(gatesFolder,'GateTop',V(32,4,4),V(0,24,gateZ),color)
+   warn('[MapBuilder] Missing Barrier_'..zone.Id..' in the imported world; that zone has no gate.')
   end
-  local gate=part(gatesFolder,zone.Id..'Gate',V(24,20,1.5),V(0,11,gateZ),color,Enum.Material.ForceField)
-  gate.Transparency=0.3 gate:SetAttribute('Zone',zone.Id) gate:SetAttribute('ZoneName',zone.Name)
-  gate:SetAttribute('RequiredRebirths',zone.RequiredRebirths)
-  local sign=part(gatesFolder,zone.Id..'GateSign',V(1,1,1),V(0,signY,gateZ),color) sign.Transparency=1 sign.CanCollide=false sign.CanQuery=false
-  label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' Ascension'..(zone.RequiredRebirths==1 and '' or 's'),160)
-  table.insert(gates,gate)
  end
 
+ -- Spawn, click orb and Ascend altar (on the trading plaza).
  local templateSpawn=workspace:FindFirstChild('SpawnLocation') if templateSpawn then templateSpawn.Enabled=false end
+ local baseplate=workspace:FindFirstChild('Baseplate') if baseplate and baseplate:IsA('BasePart') then baseplate:Destroy() end
  local spawn=Instance.new('SpawnLocation') spawn.Name='MainSpawn' spawn.Size=V(10,0.5,10)
- spawn.Position=V(0,1.3,40) spawn.Transparency=1 spawn.Anchored=true spawn.Neutral=true spawn.Duration=0 spawn.Parent=map
- local function pad(name,pos,color)
-  return part(interactive,name,V(10,0.6,10),pos,color,Enum.Material.Neon)
- end
- pad('SpawnRing',V(0,1.2,40),C(68,219,238))
- local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,5,10),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
+ spawn.Position=V(0,1.1,19) spawn.Transparency=1 spawn.Anchored=true spawn.Neutral=true spawn.Duration=0 spawn.CanCollide=false spawn.Parent=map
+ local orb=part(interactive,'ClickOrb',V(5,5,5),V(0,4.5,8),C(255,212,94),Enum.Material.Neon) orb.Shape=Enum.PartType.Ball
  label(orb,'CLICK TO EARN')
- local altar=pad('RebirthAltar',V(49,1.5,0),C(177,104,240)) label(altar,'ASCEND\nGems + permanent power')
- -- Ascend building: the pack's Rebirth Shop just behind the altar pad, else the JTea portal shrine.
- local lobby=placed[1].model
- clearBox({lobby},CFrame.new(V(66,20,0)),V(24,38,26))
- if not packModel('Rebirth Shop','RebirthShop',zones,'RebirthShop',V(66,1,0),{height=20}) then
-  place(library.Forest['Extra Portal']:GetChildren()[1],zones,'RebirthShrine',V(49,1,0),18)
- end
+ local altar=part(interactive,'RebirthAltar',V(8,0.4,8),V(19,0.9,15),C(177,104,240),Enum.Material.Neon)
+ label(altar,'ASCEND\nGems + permanent power')
 
- -- Lobby stations from the pack: a treasure chest that opens Daily Rewards and an enchanting table
- -- that opens the Token Shop (boosts). Each gets a prompt; the server opens the panel (init.server.lua).
+ -- Lobby stations: prompts in front of the art's buildings open their panels (see init.server.lua).
  local stations={}
- local function station(name,key,kind,pos,height,action)
-  clearBox({lobby},CFrame.new(pos+V(0,12,0)),V(14,22,14))
-  local m=packModel(name,key,zones,kind..'Station',pos,{height=height})
-  if not m then return end
-  local cf,size=m:GetBoundingBox()
-  local hit=part(interactive,kind..'Prompt',V(2,2,2),cf.Position,C(255,255,255))
-  hit.Transparency=1 hit.CanCollide=false hit.CanQuery=false
-  local prompt=Instance.new('ProximityPrompt') prompt.ActionText=action prompt.ObjectText=''
-  prompt.HoldDuration=0 prompt.MaxActivationDistance=14 prompt.RequiresLineOfSight=false prompt.Parent=hit
-  label(hit,string.upper(action),90).StudsOffset=V(0,size.Y/2+2,0)
-  stations[kind]=prompt
- end
- station('Group Chest','GroupChest','Daily',V(24,1,46),7,'Daily Rewards')
- station('Enchanting Table','EnchantingTable','TokenShop',V(-24,1,46),6,'Boosts')
-
- -- A few pack clouds drifting high over the lobby.
- for i,spot in ipairs({V(-60,78,-20),V(40,88,30),V(90,74,-60),V(-100,84,60),V(10,92,-90)}) do
-  packModel('Cloud','Cloud',zones,'Cloud',spot,{width=28+i*5,decor=true})
+ for _,s in ipairs({
+  {kind='Shop',pos=V(24,2.5,5),action='Upgrades'},
+  {kind='Pets',pos=V(0,2.5,-20),action='Pet Index'},
+  {kind='Daily',pos=V(-24,2.5,5),action='Daily Rewards'},
+  {kind='TokenShop',pos=V(8,3,0),action='Boosts',sign='BOOSTS\nWishing fountain'},
+ }) do
+  local hit=invisible(part(interactive,s.kind..'Prompt',V(2,2,2),s.pos,C(255,255,255)))
+  stations[s.kind]=prompt(hit,s.action)
+  if s.sign then label(hit,s.sign,90).StudsOffset=V(0,6,0) end
  end
 
- -- Egg stands: one glass capsule from the pack per egg (Candy/Space reuse the Forest capsule),
- -- its egg recolored per zone, with an invisible clickable hitbox around it. The starting egg keeps
- -- its lobby spot; the others stand just inside their zone's entrance.
- local function capsule(zoneId)
-  local zone=library:FindFirstChild(zoneId) or library.Forest
-  local best,bestSize
-  for _,m in ipairs(zone.Shop:GetChildren()[1]:GetChildren()) do
-   if m:IsA('Model') and m:FindFirstChild('Egg',true) then -- capsules hold an Egg part; the flat pads don't
-    local _,sz=m:GetBoundingBox() if not bestSize or sz.Magnitude>bestSize then best,bestSize=m,sz.Magnitude end
-   end
-  end
-  return best
- end
- local byZone={} for _,p in ipairs(placed) do byZone[p.zone.Id]=p end
+ -- Eggs: an invisible clickable box around each art egg, with a label and sparkles.
  local eggs={}
  for _,egg in ipairs(Config.Eggs) do
-  local z=assert(byZone[egg.Zone],'No zone for egg '..egg.Id)
-  local pos=z==placed[1] and V(-42,1,-3) or V(-30,1,z.center.Z+z.floorSize.Z/2-45)
-  if z~=placed[1] then clearBox({z.model},CFrame.new(pos+V(0,20,0)),V(16,38,16)) end
-  local m=place(capsule(egg.Zone),zones,egg.Id..'Stand',pos,11)
-  for _,d in ipairs(m:GetDescendants()) do if d:IsA('BasePart') and d.Name=='Egg' then d.Color=SOURCES[egg.Zone].color end end
-  local cf,size=m:GetBoundingBox()
-  local p=part(interactive,egg.Id,size+V(1,1,1),cf.Position,SOURCES[egg.Zone].color) p.CFrame=cf
-  p.Transparency=1 p.CanCollide=false p:SetAttribute('Zone',egg.Zone)
-  label(p,egg.Name..'\n'..short(egg.Cost)..' coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' Ascensions' or ''))
-  eggs[egg.Id]=p
+  local island=ISLANDS[egg.Zone]
+  local body=world:FindFirstChild('EggBody_'..egg.Zone,true)
+  local cf,size
+  if body and body:IsA('BasePart') then cf,size=body.CFrame,body.Size
+  elseif island then cf,size=CFrame.new(island.center+V(-13,5.2,5)),V(4.2,5,4.2)
+  else warn('[MapBuilder] No island for egg '..egg.Id) end
+  if cf then
+   local p=invisible(part(interactive,egg.Id,size+V(1.5,1.5,1.5),cf.Position,ZONE_COLORS[egg.Zone] or C(255,255,255)))
+   p:SetAttribute('Zone',egg.Zone)
+   label(p,egg.Name..'\n'..short(egg.Cost)..' Coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' Ascensions' or '')).StudsOffset=V(0,size.Y/2+3,0)
+   local sparkle=Instance.new('ParticleEmitter') sparkle.Texture='rbxasset://textures/particles/sparkles_main.dds'
+   sparkle.Color=ColorSequence.new(ZONE_COLORS[egg.Zone] or C(255,255,255)) sparkle.Size=NumberSequence.new(0.35,0)
+   sparkle.Lifetime=NumberRange.new(0.6,1.2) sparkle.Rate=6 sparkle.Speed=NumberRange.new(0.5,1.5)
+   sparkle.SpreadAngle=Vector2.new(180,180) sparkle.LightEmission=0.8 sparkle.Parent=p
+   eggs[egg.Id]=p
+  end
  end
 
- -- Bosses: a giant critter at the far end of each zone, facing the entrance, with a Fight prompt.
- -- Fights are per player and run on the server (see init.server.lua).
+ -- Bosses: a giant version of the biome's Legendary pet on a glowing ring, facing the island center.
  local bosses={}
  for _,boss in ipairs(Config.Bosses) do
-  local z=byZone[boss.Zone]
-  if z then
-   local pos=V(30,1,z.center.Z-z.floorSize.Z/2+35)
-   clearBox({z.model},CFrame.new(pos+V(0,22,0)),V(34,44,34))
-   local color=SOURCES[boss.Zone].color
-   local arena=part(zones,boss.Id..'Arena',V(0.4,28,28),pos,color,Enum.Material.Neon) -- glowing ring under the boss
-   arena.Shape=Enum.PartType.Cylinder arena.CFrame=CFrame.new(pos+V(0,0.2,0))*CFrame.Angles(0,0,math.pi/2)
-   local m=PetModelFactory.Create({Name=boss.Name,Rarity=boss.Rarity},{WithEffects=false})
-   m.Name=boss.Id m:ScaleTo(10)
-   for _,d in ipairs(m:GetDescendants()) do
-    if d:IsA('BasePart') then
-     if d.Name:find('Eye') then d.Color=C(255,40,40) d.Material=Enum.Material.Neon else d.Color=color end
-    end
-   end
-   m.PrimaryPart.CanCollide=true
-   m:PivotTo(CFrame.new(pos)*CFrame.Angles(0,math.pi,0)) -- face +Z (the zone entrance)
-   local cf,size=m:GetBoundingBox()
-   m:PivotTo(m:GetPivot()+V(0,pos.Y+0.4-(cf.Position.Y-size.Y/2),0)) -- rest the model's lowest point on the arena ring
+  local island=ISLANDS[boss.Zone]
+  if island then
+   local pos=findClearSpot(island,{world},V(14,14,14))
+   local ring=part(zones,boss.Id..'Arena',V(0.4,16,16),pos,ZONE_COLORS[boss.Zone],Enum.Material.Neon)
+   ring.Shape=Enum.PartType.Cylinder ring.CFrame=CFrame.new(pos+V(0,0.2,0))*CFrame.Angles(0,0,math.pi/2)
+   local m=PetModelFactory.Create({Name=boss.Model,Rarity=boss.Rarity},{WithEffects=false})
+   m.Name=boss.Id
+   local _,size=m:GetBoundingBox()
+   m:ScaleTo(m:GetScale()*12/math.max(size.Y,0.1))
+   local toCenter=V(island.center.X,pos.Y,island.center.Z)-pos
+   local yaw=math.atan2(-toCenter.X,-toCenter.Z) -- pets face -Z; turn that toward the center
+   m:PivotTo(CFrame.new(pos)*CFrame.Angles(0,yaw,0))
+   local cf,newSize=m:GetBoundingBox()
+   m:PivotTo(m:GetPivot()+V(0,pos.Y+0.4-(cf.Position.Y-newSize.Y/2),0))
    m.Parent=zones
-   label(m.Head,boss.Name..'\n❤ '..short(boss.Health)..' HP',140)
-   local prompt=Instance.new('ProximityPrompt') prompt.ActionText='Fight' prompt.ObjectText=boss.Name
-   prompt.HoldDuration=0 prompt.MaxActivationDistance=22 prompt.RequiresLineOfSight=false prompt.Parent=m.PrimaryPart
-   bosses[boss.Id]={Model=m,Prompt=prompt,Position=pos}
+   local body=m.PrimaryPart or m:FindFirstChildWhichIsA('BasePart',true)
+   body.CanCollide=true
+   label(body,boss.Name..'\n❤ '..short(boss.Health)..' HP',140).StudsOffset=V(0,newSize.Y/2+2,0)
+   bosses[boss.Id]={Model=m,Prompt=prompt(body,'Fight',boss.Name,22),Position=pos}
   end
  end
 
@@ -303,6 +222,9 @@ function MapBuilder.Build()
  grade.Name='SimulatorGrade' grade.Saturation=0.2 grade.Contrast=0.08 grade.Brightness=0.02 grade.Parent=lighting
  local bloom=lighting:FindFirstChild('SimulatorBloom') or Instance.new('BloomEffect')
  bloom.Name='SimulatorBloom' bloom.Intensity=0.3 bloom.Size=20 bloom.Threshold=1.4 bloom.Parent=lighting
- return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses,Stations=stations}
+
+ -- Global leaderboards go on the art's two panels at the lobby's south edge (facing the spawn).
+ local boardSpots={CFrame.new(-6,6,29.4),CFrame.new(6,6,29.4)}
+ return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses,Stations=stations,BoardSpots=boardSpots}
 end
 return MapBuilder

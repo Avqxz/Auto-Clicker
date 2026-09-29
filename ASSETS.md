@@ -1,55 +1,55 @@
-# Map assets
+# Map & pet assets (art package)
 
-The map is built from free Creator Store assets that live in the place file,
-not in this repo (Rojo doesn't sync ServerStorage). Import them once in Studio
-before pressing Play. Delete any scripts that come inside imported models;
-the map code also strips scripts from every clone.
+The world and pets come from the Blender art package in `art/` (`art/README.md` describes it; `art/` is
+git-ignored, the `.blend` and zip are ~75 MB). The meshes are uploaded to Roblox and live in the place:
 
-## Required: `ServerStorage/JTeaSimulatorPack`
+| In the place | What | Used by |
+|---|---|---|
+| `ServerStorage.ArtPack.World` | `World_Assembled.fbx`: lobby, 7 biome islands, bridges, gates, egg stands | `MapBuilder.lua` |
+| `ReplicatedStorage.ArtPets.Pet_<Biome>_<Name>` | the 49 pets | `PetModelFactory.lua` (followers, bosses, hatch reveal) |
+| `ServerStorage.ArtPack.Props`, `.Variants` | the 8 prop sets and the 6 Puppy color variants | nothing yet (a library for building) |
 
-Insert JTea's free simulator pack (asset **7151365600**) from the Toolbox and
-move it into ServerStorage, renamed `JTeaSimulatorPack`. `MapBuilder.lua`
-errors on startup without it. It uses these parts of the pack:
+Pet icons are uploaded images; their ids are in `GameConfig.PetArt` (`Icon`) and shown on pet cards.
+Asset ids for everything are recorded in `tools/art/uploaded.json`, and each imported model carries an
+`AssetId` attribute.
 
-- `Forest` / `Ice` / `Lava` → `Map`: the Forest, Ice World and Lava World zones
-- `Forest` / `Ice` / `Lava` → `Shop`: one glass egg capsule per egg (Candy and Space use the Forest capsule)
-- `Forest` → `Extra Portal`: the Rebirth shrine
+## How the place was imported
 
-## Required: `ServerStorage/ZoneMaps`
+Studio's 3D Importer works too, but the package was imported by script:
 
-Two free Creator Store maps, cleaned up (scripts, sounds, spawn points and
-leftover buttons removed) and saved in the place:
+1. `python3 tools/art/upload.py` uploads the world, pets, props, variants and icons with Open Cloud (needs an
+   API key with Assets read+write, from the account that owns the place, in `~/.roblox/opencloud_key`).
+   Before uploading, `fbxfix.py` rewrites each FBX to 1 unit = 1 stud: Blender stores root objects with
+   scale 100 and centimeter offsets, which Open Cloud would otherwise import 100x too big.
+2. The models were inserted in Studio (`InsertService:LoadAsset(id)`) into the folders above, named as in the
+   table (the world as `World`).
 
-| Child   | Source                                             | Floor used          |
-|---------|----------------------------------------------------|---------------------|
-| `Candy` | "Candy simulator MAP (Fixed)" (**4511240477**), only the meadow section between its Lvl20 and Lvl40 walls | `Baseplate` |
-| `Space` | "Button SImulator Space map" (**5109843560**)     | `Basic Floor` model |
+To re-import one file after editing the art: re-export it, run `upload.py <name>` after deleting its entry from
+`uploaded.json`, and replace the model in the place.
 
-Zones are laid out in a line along -Z, linked by walkways that end in a
-rebirth gate. `MapBuilder` clears any scenery standing in a walkway or on an
-egg spot at build time, so the maps don't need hand-editing.
+## What the code does with them
 
-## Optional: `ServerStorage/EnvironmentAssets`
+`MapBuilder.lua` clones the world into `Workspace.Map` on every server start and lines it up by
+`Barrier_Grasslands` and `EggBody_Celestial` (so its position and turn in ServerStorage don't matter; Open Cloud
+imports come in turned 180 degrees). It hooks gameplay onto named pieces:
 
-A folder of props that `AssetScenery.lua` scatters along the zone edges. It
-warns and skips everything if the folder is missing, and skips any single
-name that isn't there. Any free models work; names must match exactly:
+| Piece in the import | Becomes |
+|---|---|
+| `Barrier_<Zone>` (7) | the Ascension gate into that zone |
+| `EggBody_<Zone>` (8; `EggBody_Lobby` = Starter) | that zone's egg (clickable, labelled) |
+| Lobby Upgrades / Pet Index / Daily Rewards houses, fountain | prompts that open Upgrades, Pets, Daily Rewards, Boosts |
+| Lobby trading plaza | the Ascend altar |
+| Lobby leaderboard panels | the two global leaderboards |
 
-| Name        | Used for                                        |
-|-------------|-------------------------------------------------|
-| `Tree`      | Leafy trees (Forest only)                       |
-| `Pine`      | Pine trees (both zones)                         |
-| `Rock`      | Rocks (recolored to slate purple)               |
-| `Bush`      | Bushes                                          |
-| `Cottage`   | One house near spawn                            |
-| `Mushrooms` | Small cluster near spawn                        |
+Imports carry the package's palette-atlas texture. `ArtLook.lua` swaps it for each piece's flat Blender color
+(Neon for glowing materials) from `ArtMaterials.lua`, which `python3 tools/art/gen_materials.py` generates from
+the FBX files; regenerate it if the art changes. Pieces with several materials keep the texture.
 
-Models are rescaled to a target height when they're placed, so their
-original size doesn't matter.
+Bosses are giant versions of each biome's Legendary pet. Pets that aren't in `ArtPets` fall back to cube pets
+in their biome's colors. If the output warns that `EggBody_Celestial` is far from its design position, the
+world was imported at the wrong scale.
 
-## What the code owns
+## Previous map
 
-`MapBuilder.lua` destroys and rebuilds `Workspace.Map` on every server start,
-clears Terrain under the Forest, places the five zones with walkways and gates, flattens every map part to SmoothPlastic for
-a cartoon look (Neon/Glass/ForceField kept), and sets Lighting. Put hand-placed extras
-outside `Map`, or they'll be wiped.
+The JTea pack, `ZoneMaps`, `EnvironmentAssets`, `NaturePack`, `Cottage` and the MonzterDev pack were moved to
+`ServerStorage.BeforeArtPackage`; delete that folder once you no longer need them.

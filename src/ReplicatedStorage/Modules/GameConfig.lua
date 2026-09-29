@@ -209,9 +209,9 @@ GameConfig.AutoClickers = {
 
 -- One-time choice of starting pet, offered to new players on their first join.
 GameConfig.StarterPets = {
-	{ Name = "Cat", Rarity = "Common", Multiplier = 1.1 },
-	{ Name = "Dog", Rarity = "Common", Multiplier = 1.1 },
+	{ Name = "Puppy", Rarity = "Common", Multiplier = 1.1 },
 	{ Name = "Bunny", Rarity = "Common", Multiplier = 1.1 },
+	{ Name = "Fox", Rarity = "Common", Multiplier = 1.1 },
 }
 
 -- Players see this as "Ascension"; the save keeps the original RebirthCount field.
@@ -275,16 +275,19 @@ function GameConfig.GetAscensionGems(power, rebirthCount)
 end
 
 -- ===== Zones =====
--- Biome zones laid out in a line and linked by walkways. Each walkway ends in
--- a gate that stays solid for players below the zone's RequiredRebirths.
+-- The art package's islands: a lobby and seven biomes joined by bridges. Each bridge has a gate that
+-- stays solid for players below the next zone's RequiredRebirths.
 -- Zone eggs can only be hatched while standing near them (EggHatchRange).
 
 GameConfig.Zones = {
-	{ Id = "Forest", Name = "Forest", RequiredRebirths = 0 },
-	{ Id = "Ice", Name = "Ice World", RequiredRebirths = 1 },
-	{ Id = "Lava", Name = "Lava World", RequiredRebirths = 2 },
-	{ Id = "Candy", Name = "Candy World", RequiredRebirths = 3 },
-	{ Id = "Space", Name = "Space World", RequiredRebirths = 5 },
+	{ Id = "Lobby", Name = "Lobby", RequiredRebirths = 0 },
+	{ Id = "Grasslands", Name = "Grasslands", RequiredRebirths = 1 },
+	{ Id = "Desert", Name = "Desert", RequiredRebirths = 2 },
+	{ Id = "Ice", Name = "Ice Peaks", RequiredRebirths = 3 },
+	{ Id = "Enchanted", Name = "Enchanted Forest", RequiredRebirths = 4 },
+	{ Id = "Volcano", Name = "Volcano", RequiredRebirths = 5 },
+	{ Id = "Candy", Name = "Candy Land", RequiredRebirths = 6 },
+	{ Id = "Celestial", Name = "Celestial Heaven", RequiredRebirths = 8 },
 }
 
 GameConfig.EggHatchRange = 40 -- studs; eggs outside the starting zone must be hatched in person
@@ -458,12 +461,16 @@ GameConfig.BossLossCooldown = 10
 GameConfig.BossRange = 70 -- studs; clicks only hit the boss while this close
 GameConfig.MaxGearItems = 40
 
+-- Model = the pet whose model is scaled up for the boss. Ids of the original five bosses are kept so
+-- gear already in saves still belongs to a boss.
 GameConfig.Bosses = {
-	{ Zone = "Forest", Id = "Mossback", Name = "MOSSBACK", Health = 3000, RewardCoins = 1200, RewardGems = 2, RewardEssence = 1, Rarity = "Common" },
-	{ Zone = "Ice", Id = "FrostGolem", Name = "FROST GOLEM", Health = 40000, RewardCoins = 15000, RewardGems = 4, RewardEssence = 3, Rarity = "Rare" },
-	{ Zone = "Lava", Id = "MagmaKing", Name = "MAGMA KING", Health = 600000, RewardCoins = 200000, RewardGems = 8, RewardEssence = 6, Rarity = "Epic" },
-	{ Zone = "Candy", Id = "GummyTyrant", Name = "GUMMY TYRANT", Health = 10000000, RewardCoins = 3000000, RewardGems = 15, RewardEssence = 12, Rarity = "Legendary" },
-	{ Zone = "Space", Id = "VoidTitan", Name = "VOID TITAN", Health = 250000000, RewardCoins = 60000000, RewardGems = 30, RewardEssence = 25, Rarity = "Mythic" },
+	{ Zone = "Grasslands", Id = "Mossback", Name = "STAG KING", Model = "Crowned Stag", Health = 3000, RewardCoins = 1200, RewardGems = 2, RewardEssence = 1, Rarity = "Common" },
+	{ Zone = "Desert", Id = "Sphinx", Name = "GREAT SPHINX", Model = "Sphinx", Health = 20000, RewardCoins = 8000, RewardGems = 3, RewardEssence = 2, Rarity = "Common" },
+	{ Zone = "Ice", Id = "FrostGolem", Name = "AURORA OWL", Model = "Aurora Owl", Health = 80000, RewardCoins = 30000, RewardGems = 4, RewardEssence = 3, Rarity = "Rare" },
+	{ Zone = "Enchanted", Id = "CrystalDeer", Name = "CRYSTAL DEER", Model = "Crystal Deer", Health = 400000, RewardCoins = 150000, RewardGems = 6, RewardEssence = 5, Rarity = "Rare" },
+	{ Zone = "Volcano", Id = "MagmaKing", Name = "PHOENIX LORD", Model = "Phoenix", Health = 1500000, RewardCoins = 600000, RewardGems = 8, RewardEssence = 6, Rarity = "Epic" },
+	{ Zone = "Candy", Id = "GummyTyrant", Name = "CAKE DRAGON", Model = "Cake Dragon", Health = 10000000, RewardCoins = 3000000, RewardGems = 15, RewardEssence = 12, Rarity = "Legendary" },
+	{ Zone = "Celestial", Id = "VoidTitan", Name = "CELESTIAL DRAGON", Model = "Celestial Dragon", Health = 250000000, RewardCoins = 60000000, RewardGems = 30, RewardEssence = 25, Rarity = "Mythic" },
 }
 
 GameConfig.GearSlots = { "Gloves", "Aura", "Core", "Artifact" }
@@ -476,10 +483,20 @@ GameConfig.Gear = {
 	{ Id = "AcornCore", Boss = "Mossback", Slot = "Core", Name = "Acorn Core", Stats = { AutoPower = 0.2 } },
 	{ Id = "MossyCharm", Boss = "Mossback", Slot = "Artifact", Name = "Mossy Charm", Stats = { CritDamage = 0.2 } },
 
+	{ Id = "SandGloves", Boss = "Sphinx", Slot = "Gloves", Name = "Sand Gloves", Stats = { ClickPower = 0.25 } },
+	{ Id = "MirageAura", Boss = "Sphinx", Slot = "Aura", Name = "Mirage Aura", Stats = { CritChance = 0.03 } },
+	{ Id = "ScarabCore", Boss = "Sphinx", Slot = "Core", Name = "Scarab Core", Stats = { AutoPower = 0.35 } },
+	{ Id = "SunAmulet", Boss = "Sphinx", Slot = "Artifact", Name = "Sun Amulet", Stats = { CritDamage = 0.3 } },
+
 	{ Id = "FrostGloves", Boss = "FrostGolem", Slot = "Gloves", Name = "Frost Gloves", Stats = { ClickPower = 0.35, CritChance = 0.01 } },
 	{ Id = "BlizzardAura", Boss = "FrostGolem", Slot = "Aura", Name = "Blizzard Aura", Stats = { CritChance = 0.04 } },
 	{ Id = "GlacierCore", Boss = "FrostGolem", Slot = "Core", Name = "Glacier Core", Stats = { AutoPower = 0.5 } },
 	{ Id = "SnowflakeRelic", Boss = "FrostGolem", Slot = "Artifact", Name = "Snowflake Relic", Stats = { CritDamage = 0.4 } },
+
+	{ Id = "CrystalGloves", Boss = "CrystalDeer", Slot = "Gloves", Name = "Crystal Gloves", Stats = { ClickPower = 0.5, CritChance = 0.01 } },
+	{ Id = "FairyAura", Boss = "CrystalDeer", Slot = "Aura", Name = "Fairy Aura", Stats = { CritChance = 0.05 } },
+	{ Id = "MoonstoneCore", Boss = "CrystalDeer", Slot = "Core", Name = "Moonstone Core", Stats = { AutoPower = 0.75 } },
+	{ Id = "MysticCharm", Boss = "CrystalDeer", Slot = "Artifact", Name = "Mystic Charm", Stats = { CritDamage = 0.5 } },
 
 	{ Id = "MagmaGloves", Boss = "MagmaKing", Slot = "Gloves", Name = "Magma Gloves", Stats = { ClickPower = 0.7 } },
 	{ Id = "InfernoAura", Boss = "MagmaKing", Slot = "Aura", Name = "Inferno Aura", Stats = { CritChance = 0.06, CritDamage = 0.2 } },
@@ -580,76 +597,181 @@ GameConfig.RarityColors = {
 
 GameConfig.Eggs = {
 	{
-		Id = "BasicEgg",
-		Name = "Basic Egg",
+		Id = "StarterEgg",
+		Name = "Starter Egg",
 		Cost = 60,
 		RequiredRebirths = 0,
-		Zone = "Forest",
+		Zone = "Lobby",
 		Pets = {
-			{ Name = "Puppy", Rarity = "Common", Weight = 50, Multiplier = 1.1 },
-			{ Name = "Kitten", Rarity = "Common", Weight = 50, Multiplier = 1.15 },
-			{ Name = "Fox", Rarity = "Rare", Weight = 25, Multiplier = 1.5 },
-			{ Name = "Wolf", Rarity = "Rare", Weight = 20, Multiplier = 1.8 },
-			{ Name = "Dragon", Rarity = "Epic", Weight = 8, Multiplier = 2.5 },
-			{ Name = "Phoenix", Rarity = "Legendary", Weight = 2, Multiplier = 6 },
+			{ Name = "Puppy", Rarity = "Common", Weight = 40, Multiplier = 1.1 },
+			{ Name = "Bunny", Rarity = "Common", Weight = 35, Multiplier = 1.1 },
+			{ Name = "Fox", Rarity = "Common", Weight = 25, Multiplier = 1.1 },
 		},
 	},
 	{
-		Id = "GoldenEgg",
-		Name = "Golden Egg",
-		Cost = 25000,
+		Id = "GrasslandsEgg",
+		Name = "Grasslands Egg",
+		Cost = 15000,
 		RequiredRebirths = 1,
+		Zone = "Grasslands",
+		Pets = {
+			{ Name = "Bee", Rarity = "Rare", Weight = 45, Multiplier = 2 },
+			{ Name = "Leaf Dragon", Rarity = "Epic", Weight = 35, Multiplier = 3.5 },
+			{ Name = "Crowned Stag", Rarity = "Legendary", Weight = 17, Multiplier = 8 },
+			{ Name = "World Tree Guardian", Rarity = "Mythic", Weight = 3, Multiplier = 25 },
+		},
+	},
+	{
+		Id = "DesertEgg",
+		Name = "Desert Egg",
+		Cost = 80000,
+		RequiredRebirths = 2,
+		Zone = "Desert",
+		Pets = {
+			{ Name = "Camel", Rarity = "Common", Weight = 30, Multiplier = 2.5 },
+			{ Name = "Cobra", Rarity = "Common", Weight = 28, Multiplier = 2.75 },
+			{ Name = "Scorpion", Rarity = "Rare", Weight = 18, Multiplier = 3.75 },
+			{ Name = "Fennec", Rarity = "Rare", Weight = 14, Multiplier = 4.5 },
+			{ Name = "Scarab", Rarity = "Epic", Weight = 7, Multiplier = 7.5 },
+			{ Name = "Sphinx", Rarity = "Legendary", Weight = 2.5, Multiplier = 17.5 },
+			{ Name = "Sandclock Colossus", Rarity = "Mythic", Weight = 0.5, Multiplier = 45 },
+		},
+	},
+	{
+		Id = "IceEgg",
+		Name = "Ice Egg",
+		Cost = 300000,
+		RequiredRebirths = 3,
 		Zone = "Ice",
 		Pets = {
-			{ Name = "Golden Retriever", Rarity = "Rare", Weight = 40, Multiplier = 2 },
-			{ Name = "Griffin", Rarity = "Epic", Weight = 30, Multiplier = 3.5 },
-			{ Name = "Unicorn", Rarity = "Epic", Weight = 20, Multiplier = 4 },
-			{ Name = "Ancient Dragon", Rarity = "Legendary", Weight = 8, Multiplier = 10 },
-			{ Name = "Celestial Phoenix", Rarity = "Mythic", Weight = 2, Multiplier = 25 },
+			{ Name = "Penguin", Rarity = "Common", Weight = 30, Multiplier = 4 },
+			{ Name = "Polar Cub", Rarity = "Common", Weight = 28, Multiplier = 4.4 },
+			{ Name = "Snow Bunny", Rarity = "Rare", Weight = 18, Multiplier = 6 },
+			{ Name = "Ice Wolf", Rarity = "Rare", Weight = 14, Multiplier = 7.2 },
+			{ Name = "Frost Dragon", Rarity = "Epic", Weight = 7, Multiplier = 12 },
+			{ Name = "Aurora Owl", Rarity = "Legendary", Weight = 2.5, Multiplier = 28 },
+			{ Name = "Frozen TV", Rarity = "Mythic", Weight = 0.5, Multiplier = 72 },
 		},
 	},
 	{
-		Id = "LavaEgg",
-		Name = "Lava Egg",
-		Cost = 250000,
-		RequiredRebirths = 2,
-		Zone = "Lava",
+		Id = "EnchantedEgg",
+		Name = "Enchanted Egg",
+		Cost = 1200000,
+		RequiredRebirths = 4,
+		Zone = "Enchanted",
 		Pets = {
-			{ Name = "Lava Pup", Rarity = "Rare", Weight = 40, Multiplier = 3 },
-			{ Name = "Magma Golem", Rarity = "Epic", Weight = 30, Multiplier = 5 },
-			{ Name = "Fire Serpent", Rarity = "Epic", Weight = 20, Multiplier = 6 },
-			{ Name = "Inferno Dragon", Rarity = "Legendary", Weight = 8, Multiplier = 15 },
-			{ Name = "Volcano Titan", Rarity = "Mythic", Weight = 2, Multiplier = 40 },
+			{ Name = "Fairy Cat", Rarity = "Common", Weight = 30, Multiplier = 6.5 },
+			{ Name = "Mushroom", Rarity = "Common", Weight = 28, Multiplier = 7.15 },
+			{ Name = "Crystal Bunny", Rarity = "Rare", Weight = 18, Multiplier = 9.75 },
+			{ Name = "Spirit Fox", Rarity = "Rare", Weight = 14, Multiplier = 11.7 },
+			{ Name = "Mystic Dragon", Rarity = "Epic", Weight = 7, Multiplier = 19.5 },
+			{ Name = "Crystal Deer", Rarity = "Legendary", Weight = 2.5, Multiplier = 45.5 },
+			{ Name = "Moon Mask", Rarity = "Mythic", Weight = 0.5, Multiplier = 117 },
+		},
+	},
+	{
+		Id = "VolcanoEgg",
+		Name = "Volcano Egg",
+		Cost = 5000000,
+		RequiredRebirths = 5,
+		Zone = "Volcano",
+		Pets = {
+			{ Name = "Lava Pup", Rarity = "Common", Weight = 30, Multiplier = 10 },
+			{ Name = "Fire Bat", Rarity = "Common", Weight = 28, Multiplier = 11 },
+			{ Name = "Ember Lizard", Rarity = "Rare", Weight = 18, Multiplier = 15 },
+			{ Name = "Demon", Rarity = "Rare", Weight = 14, Multiplier = 18 },
+			{ Name = "Magma Golem", Rarity = "Epic", Weight = 7, Multiplier = 30 },
+			{ Name = "Phoenix", Rarity = "Legendary", Weight = 2.5, Multiplier = 70 },
+			{ Name = "Infernal Chest", Rarity = "Mythic", Weight = 0.5, Multiplier = 180 },
 		},
 	},
 	{
 		Id = "CandyEgg",
 		Name = "Candy Egg",
-		Cost = 3000000,
-		RequiredRebirths = 3,
+		Cost = 20000000,
+		RequiredRebirths = 6,
 		Zone = "Candy",
 		Pets = {
-			{ Name = "Gummy Bear", Rarity = "Rare", Weight = 40, Multiplier = 5 },
-			{ Name = "Lollipop Cat", Rarity = "Epic", Weight = 30, Multiplier = 9 },
-			{ Name = "Cupcake Unicorn", Rarity = "Epic", Weight = 20, Multiplier = 11 },
-			{ Name = "Candy Dragon", Rarity = "Legendary", Weight = 8, Multiplier = 28 },
-			{ Name = "Sugar Queen", Rarity = "Mythic", Weight = 2, Multiplier = 75 },
+			{ Name = "Cupcake", Rarity = "Common", Weight = 30, Multiplier = 16 },
+			{ Name = "Marshmallow", Rarity = "Common", Weight = 28, Multiplier = 17.6 },
+			{ Name = "Gummy Bear", Rarity = "Rare", Weight = 18, Multiplier = 24 },
+			{ Name = "Donut", Rarity = "Rare", Weight = 14, Multiplier = 28.8 },
+			{ Name = "Candy Dog", Rarity = "Epic", Weight = 7, Multiplier = 48 },
+			{ Name = "Cake Dragon", Rarity = "Legendary", Weight = 2.5, Multiplier = 112 },
+			{ Name = "Chocolate Chicken", Rarity = "Mythic", Weight = 0.5, Multiplier = 288 },
 		},
 	},
 	{
-		Id = "SpaceEgg",
-		Name = "Space Egg",
-		Cost = 40000000,
-		RequiredRebirths = 5,
-		Zone = "Space",
+		Id = "CelestialEgg",
+		Name = "Celestial Egg",
+		Cost = 150000000,
+		RequiredRebirths = 8,
+		Zone = "Celestial",
 		Pets = {
-			{ Name = "Alien", Rarity = "Rare", Weight = 40, Multiplier = 9 },
-			{ Name = "Astro Dog", Rarity = "Epic", Weight = 30, Multiplier = 16 },
-			{ Name = "Nebula Fox", Rarity = "Epic", Weight = 20, Multiplier = 20 },
-			{ Name = "Galaxy Dragon", Rarity = "Legendary", Weight = 8, Multiplier = 50 },
-			{ Name = "Cosmic Overlord", Rarity = "Mythic", Weight = 2, Multiplier = 140 },
+			{ Name = "Star Pup", Rarity = "Common", Weight = 30, Multiplier = 26 },
+			{ Name = "Cosmic Cat", Rarity = "Common", Weight = 28, Multiplier = 28.6 },
+			{ Name = "Star Sprite", Rarity = "Rare", Weight = 18, Multiplier = 39 },
+			{ Name = "Angel", Rarity = "Rare", Weight = 14, Multiplier = 46.8 },
+			{ Name = "Void Ray", Rarity = "Epic", Weight = 7, Multiplier = 78 },
+			{ Name = "Celestial Dragon", Rarity = "Legendary", Weight = 2.5, Multiplier = 182 },
+			{ Name = "Orbit Guardian", Rarity = "Mythic", Weight = 0.5, Multiplier = 468 },
 		},
 	},
+}
+
+-- Pet name -> its model in ReplicatedStorage.ArtPets (from the art package), its biome, and its rendered
+-- icon (uploaded image, shown on pet cards). PetModelFactory falls back to a cube pet in the biome's
+-- colors if the model isn't imported.
+GameConfig.PetArt = {
+	["Puppy"] = { Model = "Pet_Grasslands_Puppy", Biome = "Grasslands", Icon = "rbxassetid://103846961680644" },
+	["Bunny"] = { Model = "Pet_Grasslands_Bunny", Biome = "Grasslands", Icon = "rbxassetid://128121022364568" },
+	["Bee"] = { Model = "Pet_Grasslands_Bee", Biome = "Grasslands", Icon = "rbxassetid://111756269027018" },
+	["Fox"] = { Model = "Pet_Grasslands_Fox", Biome = "Grasslands", Icon = "rbxassetid://73661426520357" },
+	["Leaf Dragon"] = { Model = "Pet_Grasslands_LeafDragon", Biome = "Grasslands", Icon = "rbxassetid://82112157321350" },
+	["Crowned Stag"] = { Model = "Pet_Grasslands_CrownedStag", Biome = "Grasslands", Icon = "rbxassetid://76024431754536" },
+	["World Tree Guardian"] = { Model = "Pet_Grasslands_WorldTreeGuardian", Biome = "Grasslands", Icon = "rbxassetid://109837610531088" },
+	["Camel"] = { Model = "Pet_Desert_Camel", Biome = "Desert", Icon = "rbxassetid://109947294993165" },
+	["Cobra"] = { Model = "Pet_Desert_Cobra", Biome = "Desert", Icon = "rbxassetid://78323012044742" },
+	["Scorpion"] = { Model = "Pet_Desert_Scorpion", Biome = "Desert", Icon = "rbxassetid://107957695943317" },
+	["Fennec"] = { Model = "Pet_Desert_Fennec", Biome = "Desert", Icon = "rbxassetid://121584564209762" },
+	["Scarab"] = { Model = "Pet_Desert_Scarab", Biome = "Desert", Icon = "rbxassetid://85912978382430" },
+	["Sphinx"] = { Model = "Pet_Desert_Sphinx", Biome = "Desert", Icon = "rbxassetid://118098140986504" },
+	["Sandclock Colossus"] = { Model = "Pet_Desert_SandclockColossus", Biome = "Desert", Icon = "rbxassetid://113643259682568" },
+	["Penguin"] = { Model = "Pet_Ice_Penguin", Biome = "Ice", Icon = "rbxassetid://129203863609859" },
+	["Polar Cub"] = { Model = "Pet_Ice_PolarCub", Biome = "Ice", Icon = "rbxassetid://125625734909186" },
+	["Snow Bunny"] = { Model = "Pet_Ice_SnowBunny", Biome = "Ice", Icon = "rbxassetid://71235331544698" },
+	["Ice Wolf"] = { Model = "Pet_Ice_IceWolf", Biome = "Ice", Icon = "rbxassetid://102556498341035" },
+	["Frost Dragon"] = { Model = "Pet_Ice_FrostDragon", Biome = "Ice", Icon = "rbxassetid://120130519760005" },
+	["Aurora Owl"] = { Model = "Pet_Ice_AuroraOwl", Biome = "Ice", Icon = "rbxassetid://137994648550726" },
+	["Frozen TV"] = { Model = "Pet_Ice_FrozenTV", Biome = "Ice", Icon = "rbxassetid://103008526204124" },
+	["Fairy Cat"] = { Model = "Pet_Enchanted_FairyCat", Biome = "Enchanted", Icon = "rbxassetid://92742548003992" },
+	["Mushroom"] = { Model = "Pet_Enchanted_Mushroom", Biome = "Enchanted", Icon = "rbxassetid://75140815978770" },
+	["Crystal Bunny"] = { Model = "Pet_Enchanted_CrystalBunny", Biome = "Enchanted", Icon = "rbxassetid://97852022602307" },
+	["Spirit Fox"] = { Model = "Pet_Enchanted_SpiritFox", Biome = "Enchanted", Icon = "rbxassetid://124426584648756" },
+	["Mystic Dragon"] = { Model = "Pet_Enchanted_MysticDragon", Biome = "Enchanted", Icon = "rbxassetid://85083156829718" },
+	["Crystal Deer"] = { Model = "Pet_Enchanted_CrystalDeer", Biome = "Enchanted", Icon = "rbxassetid://127253958103300" },
+	["Moon Mask"] = { Model = "Pet_Enchanted_MoonMask", Biome = "Enchanted", Icon = "rbxassetid://75358607880420" },
+	["Lava Pup"] = { Model = "Pet_Volcano_LavaPup", Biome = "Volcano", Icon = "rbxassetid://137163502198168" },
+	["Fire Bat"] = { Model = "Pet_Volcano_FireBat", Biome = "Volcano", Icon = "rbxassetid://72687460603377" },
+	["Ember Lizard"] = { Model = "Pet_Volcano_EmberLizard", Biome = "Volcano", Icon = "rbxassetid://83889621185914" },
+	["Demon"] = { Model = "Pet_Volcano_Demon", Biome = "Volcano", Icon = "rbxassetid://135096734646167" },
+	["Magma Golem"] = { Model = "Pet_Volcano_MagmaGolem", Biome = "Volcano", Icon = "rbxassetid://110957780944833" },
+	["Phoenix"] = { Model = "Pet_Volcano_Phoenix", Biome = "Volcano", Icon = "rbxassetid://109420304265773" },
+	["Infernal Chest"] = { Model = "Pet_Volcano_InfernalChest", Biome = "Volcano", Icon = "rbxassetid://140074705941404" },
+	["Cupcake"] = { Model = "Pet_Candy_Cupcake", Biome = "Candy", Icon = "rbxassetid://89903970427330" },
+	["Marshmallow"] = { Model = "Pet_Candy_Marshmallow", Biome = "Candy", Icon = "rbxassetid://116649793572646" },
+	["Gummy Bear"] = { Model = "Pet_Candy_GummyBear", Biome = "Candy", Icon = "rbxassetid://95406905832230" },
+	["Donut"] = { Model = "Pet_Candy_Donut", Biome = "Candy", Icon = "rbxassetid://82065435440752" },
+	["Candy Dog"] = { Model = "Pet_Candy_CandyDog", Biome = "Candy", Icon = "rbxassetid://131151440542933" },
+	["Cake Dragon"] = { Model = "Pet_Candy_CakeDragon", Biome = "Candy", Icon = "rbxassetid://104200478371145" },
+	["Chocolate Chicken"] = { Model = "Pet_Candy_ChocolateChicken", Biome = "Candy", Icon = "rbxassetid://88412596442918" },
+	["Star Pup"] = { Model = "Pet_Celestial_StarPup", Biome = "Celestial", Icon = "rbxassetid://89874853310986" },
+	["Cosmic Cat"] = { Model = "Pet_Celestial_CosmicCat", Biome = "Celestial", Icon = "rbxassetid://126819945035405" },
+	["Star Sprite"] = { Model = "Pet_Celestial_StarSprite", Biome = "Celestial", Icon = "rbxassetid://71639698217612" },
+	["Angel"] = { Model = "Pet_Celestial_Angel", Biome = "Celestial", Icon = "rbxassetid://83750155487243" },
+	["Void Ray"] = { Model = "Pet_Celestial_VoidRay", Biome = "Celestial", Icon = "rbxassetid://128180175040278" },
+	["Celestial Dragon"] = { Model = "Pet_Celestial_CelestialDragon", Biome = "Celestial", Icon = "rbxassetid://120000969015780" },
+	["Orbit Guardian"] = { Model = "Pet_Celestial_OrbitGuardian", Biome = "Celestial", Icon = "rbxassetid://106834778953477" },
 }
 
 -- ===== Pet abilities =====
@@ -663,7 +785,7 @@ GameConfig.Eggs = {
 GameConfig.GoldenAbilityScale = 1.5
 GameConfig.PetAbilities = {
 	Dragon = { Name = "Overcharge", Burst = { Every = 50, Multiplier = 3 } },
-	Phoenix = { Name = "Flame Burst", Burst = { Every = 30, Multiplier = 5 } },
+	Phoenix = { Name = "Flame Burst", Burst = { Every = 25, Multiplier = 10 } },
 	Griffin = { Name = "Keen Eye", CritChance = 0.03 },
 	Unicorn = { Name = "Lucky Horn", EggLuck = 0.15 },
 	["Ancient Dragon"] = { Name = "Overcharge", Burst = { Every = 30, Multiplier = 10 } },
@@ -680,6 +802,28 @@ GameConfig.PetAbilities = {
 	["Nebula Fox"] = { Name = "Void Surge", Surge = { Chance = 0.05 } },
 	["Galaxy Dragon"] = { Name = "Supernova", Burst = { Every = 30, Multiplier = 15 } },
 	["Cosmic Overlord"] = { Name = "Singularity", ComboBonus = 0.5, Burst = { Every = 100, Multiplier = 25 } },
+
+	-- Art-package pets (Epic, Legendary and Secret/Mythic of each biome). Phoenix and Magma Golem
+	-- above also cover the Volcano pets of the same names.
+	["Leaf Dragon"] = { Name = "Photosynthesis", AutoPower = 0.15 },
+	["Crowned Stag"] = { Name = "Royal Charge", Burst = { Every = 40, Multiplier = 5 } },
+	["World Tree Guardian"] = { Name = "Ancient Roots", CoinBonus = 0.3, AutoPower = 0.3 },
+	Scarab = { Name = "Golden Shell", CoinBonus = 0.2 },
+	Sphinx = { Name = "Riddle", Proc = { Chance = 0.03, Multiplier = 8 } },
+	["Sandclock Colossus"] = { Name = "Time Warp", ComboWindow = 0.5, Burst = { Every = 60, Multiplier = 10 } },
+	["Frost Dragon"] = { Name = "Frostbite", CritChance = 0.03 },
+	["Aurora Owl"] = { Name = "Aurora", EggLuck = 0.2 },
+	["Frozen TV"] = { Name = "Static Surge", Surge = { Chance = 0.06 } },
+	["Mystic Dragon"] = { Name = "Arcane Focus", CritDamage = 0.4 },
+	["Crystal Deer"] = { Name = "Prism", Burst = { Every = 30, Multiplier = 8 } },
+	["Moon Mask"] = { Name = "Lunar Veil", EggLuck = 0.35, CritChance = 0.04 },
+	["Infernal Chest"] = { Name = "Treasure Hoard", CoinBonus = 0.6, Proc = { Chance = 0.02, Multiplier = 25 } },
+	["Candy Dog"] = { Name = "Sugar Rush", ComboWindow = 0.3 },
+	["Cake Dragon"] = { Name = "Layer Cake", Burst = { Every = 20, Multiplier = 10 } },
+	["Chocolate Chicken"] = { Name = "Golden Eggs", EggLuck = 0.4, CoinBonus = 0.4 },
+	["Void Ray"] = { Name = "Void Surge", Surge = { Chance = 0.05 } },
+	["Celestial Dragon"] = { Name = "Supernova", Burst = { Every = 25, Multiplier = 20 } },
+	["Orbit Guardian"] = { Name = "Singularity", ComboBonus = 0.6, Burst = { Every = 100, Multiplier = 30 } },
 }
 
 local PASSIVES = { "CritChance", "CritDamage", "AutoPower", "EggLuck", "ComboWindow", "ComboBonus", "CoinBonus" }

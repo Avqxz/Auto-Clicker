@@ -16,7 +16,7 @@ local PetFollowers = require(script.PetFollowers)
 -- ===== Map =====
 
 local mapRefs = MapBuilder.Build()
-require(script.GlobalBoards).Start(PlayerData)
+require(script.GlobalBoards).Start(PlayerData, mapRefs.BoardSpots)
 
 -- ===== Remotes =====
 

@@ -1,9 +1,13 @@
--- Builds a cartoon cube pet: a big blocky head on a smaller body, stubby cube feet, a cute face
+-- Builds a pet model. Pets from the art package use their imported model from
+-- ReplicatedStorage.ArtPets (see ASSETS.md) when it's there; every other pet, or an art pet whose model
+-- hasn't been imported yet, is built as a cartoon cube pet: a big blocky head on a smaller body, stubby cube feet, a cute face
 -- (big eyes with highlights, smile, blush), and species parts (ears, tail, wings, horns...) chosen
 -- per pet. Each pet has its own colors; Legendary/Mythic accents glow and Golden pets turn gold.
 -- Used for pet followers (server) and UI icons / hatch reveal (client). Pets face -Z.
 
 local GameConfig = require(script.Parent.GameConfig)
+local ArtLook = require(script.Parent.ArtLook)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PetModelFactory = {}
 
@@ -47,12 +51,119 @@ local LOOKS = {
 	["Cosmic Overlord"] = { "alien", C(40, 30, 80), C(255, 220, 90), true },
 }
 
+-- Cube-pet fallback for art-package pets not imported yet: a species guessed from the name and the
+-- biome's colors.
+local BIOME_COLORS = {
+	Grasslands = { C(120, 200, 90), C(250, 240, 200) },
+	Desert = { C(230, 180, 110), C(255, 235, 190) },
+	Ice = { C(200, 230, 255), C(90, 160, 230) },
+	Enchanted = { C(90, 200, 190), C(200, 120, 255) },
+	Volcano = { C(70, 55, 60), C(255, 110, 30) },
+	Candy = { C(255, 160, 200), C(255, 240, 200) },
+	Celestial = { C(240, 240, 255), C(255, 210, 80) },
+}
+local SPECIES_WORDS = {
+	{ "dragon", "dragon" }, { "bunny", "bunny" }, { "fox", "fox" }, { "fennec", "fox" }, { "wolf", "fox" },
+	{ "cat", "cat" }, { "pup", "dog" }, { "dog", "dog" }, { "camel", "dog" }, { "sphinx", "cat" },
+	{ "bear", "bear" }, { "cub", "bear" }, { "deer", "unicorn" }, { "stag", "unicorn" },
+	{ "owl", "bird" }, { "bird", "bird" }, { "phoenix", "bird" }, { "bat", "bird" }, { "chicken", "bird" },
+	{ "angel", "bird" }, { "penguin", "bird" }, { "bee", "bird" }, { "sprite", "bird" },
+	{ "cobra", "serpent" }, { "lizard", "serpent" }, { "scorpion", "serpent" }, { "scarab", "serpent" },
+	{ "golem", "golem" }, { "colossus", "golem" }, { "guardian", "golem" }, { "chest", "golem" }, { "tv", "golem" },
+	{ "demon", "dragon" }, { "mask", "alien" }, { "ray", "alien" },
+}
+local function fallbackLook(name)
+	local art = GameConfig.PetArt[name]
+	if not art then
+		return nil
+	end
+	local lower = string.lower(name)
+	local species = "bear"
+	for _, pair in ipairs(SPECIES_WORDS) do
+		if string.find(lower, pair[1], 1, true) then
+			species = pair[2]
+			break
+		end
+	end
+	local colors = BIOME_COLORS[art.Biome] or { C(200, 200, 210), WHITE }
+	return { species, colors[1], colors[2] }
+end
+
+-- Imported art pet: clone, make it a non-colliding decoration, size it like a cube pet, and turn it
+-- to face -Z (the art faces +Z after import). Golden pets are tinted gold.
+local ART_HEIGHT = 2.4
+local ART_YAW = math.pi
+local function buildArtPet(template, petData, withEffects)
+	local model = template:Clone()
+	if not model:IsA("Model") then
+		local wrapper = Instance.new("Model")
+		model.Parent = wrapper
+		model = wrapper
+	end
+	model.Name = petData.Name
+	ArtLook.Apply(model, template.Name)
+	-- Imported parts carry the FBX axis turn in their PivotOffset (and imports may set a PrimaryPart),
+	-- which would make the model's pivot tilted: measuring and turning around it tips the pet over.
+	-- Start from an upright pivot instead.
+	model.PrimaryPart = nil
+	model.WorldPivot = CFrame.new()
+	local biggest
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("LuaSourceContainer") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.PivotOffset = CFrame.identity
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+			if petData.Golden and not d.Name:find("^Eyes") then -- gold all over, but keep the eyes
+				if d:IsA("MeshPart") then
+					d.TextureID = ""
+				end
+				d.Color = GOLD
+			end
+			if not biggest or d.Size.Magnitude > biggest.Size.Magnitude then
+				biggest = d
+			end
+		end
+	end
+	local _, size = model:GetBoundingBox()
+	model:ScaleTo(model:GetScale() * ART_HEIGHT / math.max(size.Y, 0.1))
+	local center = model:GetBoundingBox()
+	model.WorldPivot = CFrame.new(center.Position)
+	model:PivotTo(model:GetPivot() * CFrame.Angles(0, ART_YAW, 0))
+	model.PrimaryPart = biggest
+	model.WorldPivot = CFrame.new(model:GetBoundingBox().Position) -- upright pivot at the center
+	if withEffects and biggest and (petData.Golden or petData.Rarity == "Mythic") then
+		local sparkles = Instance.new("ParticleEmitter")
+		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparkles.Color = ColorSequence.new(if petData.Golden then GOLD else GameConfig.RarityColors.Mythic)
+		sparkles.Size = NumberSequence.new(0.2, 0)
+		sparkles.Lifetime = NumberRange.new(0.5, 1)
+		sparkles.Rate = 10
+		sparkles.Speed = NumberRange.new(1, 2)
+		sparkles.SpreadAngle = Vector2.new(180, 180)
+		sparkles.LightEmission = 0.8
+		sparkles.Parent = biggest
+	end
+	return model
+end
+
 -- options.WithEffects (default true) toggles sparkle emitters (ViewportFrames don't render them).
 function PetModelFactory.Create(petData, options)
 	options = options or {}
 	local withEffects = if options.WithEffects == nil then true else options.WithEffects
 
-	local look = LOOKS[petData.Name]
+	local art = GameConfig.PetArt[petData.Name]
+	local artFolder = ReplicatedStorage:FindFirstChild("ArtPets")
+	local template = art and artFolder and artFolder:FindFirstChild(art.Model)
+	if template then
+		return buildArtPet(template, petData, withEffects)
+	end
+
+	local look = LOOKS[petData.Name] or fallbackLook(petData.Name)
 	local species = look and look[1] or "dog"
 	local main = look and look[2] or (GameConfig.RarityColors[petData.Rarity] or C(200, 200, 210))
 	local accent = look and look[3] or WHITE
