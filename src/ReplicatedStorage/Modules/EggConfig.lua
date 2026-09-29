@@ -115,6 +115,7 @@ EggConfig.Eggs = {
 			{ Name = "Mystic Dragon", Rarity = "Epic", Weight = 7, Multiplier = 19.5 },
 			{ Name = "Crystal Deer", Rarity = "Legendary", Weight = 2.5, Multiplier = 45.5 },
 			{ Name = "Moon Mask", Rarity = "Secret", Weight = 0.5, Multiplier = 117 },
+			{ Name = "Crystal Seraph", Rarity = "Secret", Weight = 0.1, Multiplier = 300 }, -- tools/art/build_crystal_seraph.py
 		},
 	},
 	{

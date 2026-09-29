@@ -876,7 +876,7 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 	card.LayoutOrder = layoutOrder
 	card.Parent = petGrid
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
-	petOutline(card, 3)
+	local border = petOutline(card, 3)
 	local gradient = Instance.new("UIGradient", card)
 	gradient.Rotation = 90
 
@@ -910,6 +910,7 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 	local group = {
 		Frame = card,
 		Gradient = gradient,
+		Border = border,
 		IconContainer = iconContainer,
 		IconBuilt = false,
 		NameLabel = nameLabel,
@@ -923,6 +924,20 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 	petGroupFrames[key] = group
 	return group
 end
+
+-- Secret pets' cards get a spinning rainbow border.
+local SECRET_RAINBOW = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 110)), ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 190, 60)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(120, 240, 110)), ColorSequenceKeypoint.new(0.6, Color3.fromRGB(80, 200, 255)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(150, 110, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 110, 230)),
+})
+local rainbowBorders = {}
+RunService.RenderStepped:Connect(function()
+	if not petsFrame.Visible then return end
+	for _, g in ipairs(rainbowBorders) do
+		g.Rotation = (os.clock() * 120) % 360
+	end
+end)
 
 local function refreshPets()
 	emptyPets.Visible = #currentData.Pets == 0
@@ -973,8 +988,26 @@ local function refreshPets()
 			group.IconBuilt = true
 		end
 
-		local color = if pet.Golden then Color3.fromRGB(255, 205, 60) else (GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(200, 200, 210))
+		local color = if pet.Golden then Color3.fromRGB(255, 205, 60)
+			elseif pet.Rarity == "Secret" then Color3.fromRGB(150, 95, 235) -- the Secret tier's own color is near-black
+			else (GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(200, 200, 210))
 		group.Frame.BackgroundColor3 = color
+		if pet.Rarity == "Secret" then
+			-- Secrets' pictures are bigger, breaking out of the top of the card.
+			group.IconContainer.Size = UDim2.fromOffset(150, 150)
+			group.IconContainer.Position = UDim2.new(0.5, 0, 0, -48)
+			group.IconContainer.ZIndex = 3
+			group.Frame.ZIndex = 2 -- above the cards around it, so the big picture isn't covered
+		end
+		if pet.Rarity == "Secret" and not group.Border:FindFirstChild("Rainbow") then
+			local rainbow = Instance.new("UIGradient")
+			rainbow.Name = "Rainbow"
+			rainbow.Color = SECRET_RAINBOW
+			rainbow.Parent = group.Border
+			group.Border.Color = Color3.new(1, 1, 1)
+			group.Border.Thickness = 4.5
+			table.insert(rainbowBorders, rainbow)
+		end
 		group.Gradient.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 215))
 		group.NameLabel.Text = (if pet.Shiny then "★ " else "") .. (if pet.Golden then "Golden " else "") .. pet.Name
 		group.MultLabel.Text = formatMultiplier(pet.Multiplier)

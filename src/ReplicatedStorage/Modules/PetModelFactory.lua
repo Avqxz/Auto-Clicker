@@ -9,7 +9,8 @@ local GameConfig = require(script.Parent.GameConfig)
 local ArtLook = require(script.Parent.ArtLook)
 
 -- Tiers whose pets sparkle (as do Golden and Shiny pets).
-local SPARKLY = { Mythic = true, Secret = true }
+local SPARKLY = { Mythic = true }
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PetModelFactory = {}
@@ -95,8 +96,101 @@ end
 -- Imported art pet: clone, make it a non-colliding decoration, size it like a cube pet, and turn it
 -- to face -Z (the art faces +Z after import). Golden pets are tinted gold.
 local ART_HEIGHT = 2.4
+-- Secret pets are built this much bigger than other pets.
+local SECRET_SCALE = 2.8
 local ART_YAW = math.pi
-local function buildArtPet(template, petData, withEffects)
+-- Divine aura for endgame pets (PetArt entry `Aura = true`): a white rim-light outline, a pink glow on
+-- the surroundings, star sparkles, slow rising motes, and flare flashes on the gem.
+local AURA_PINK = Color3.fromRGB(255, 120, 200)
+local AURA_PALE = Color3.fromRGB(255, 220, 240)
+local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
+local function addAura(model)
+	local cf, size = model:GetBoundingBox()
+	local holder = Instance.new("Part")
+	holder.Name = "Aura"
+	holder.Transparency = 1
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CanTouch = false
+	holder.Size = size * 0.8
+	holder.CFrame = cf
+	holder.Parent = model
+
+	local rim = Instance.new("Highlight")
+	rim.FillTransparency = 1
+	rim.OutlineColor = Color3.new(1, 1, 1)
+	rim.OutlineTransparency = 0.15
+	rim.DepthMode = Enum.HighlightDepthMode.Occluded
+	rim.Parent = model
+
+	local glow = Instance.new("PointLight")
+	glow.Color = AURA_PINK
+	glow.Brightness = 1
+	glow.Range = size.Y * 0.6 -- just around the pet: an equipped one follows close enough to tint its owner
+	glow.Parent = holder
+
+	local stars = Instance.new("ParticleEmitter")
+	stars.Name = "Stars"
+	stars.Texture = SPARKLE
+	stars.Color = ColorSequence.new(Color3.new(1, 1, 1), AURA_PINK)
+	stars.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.25, size.Y * 0.1),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	stars.Lifetime = NumberRange.new(0.6, 1.2)
+	stars.Rate = 14
+	stars.Speed = NumberRange.new(0.5, 1.5)
+	stars.SpreadAngle = Vector2.new(180, 180)
+	stars.Rotation = NumberRange.new(0, 360)
+	stars.RotSpeed = NumberRange.new(-90, 90)
+	stars.LightEmission = 1
+	stars.Parent = holder
+
+	local motes = Instance.new("ParticleEmitter")
+	motes.Name = "Motes"
+	motes.Texture = SPARKLE
+	motes.Color = ColorSequence.new(AURA_PALE)
+	motes.Size = NumberSequence.new(size.Y * 0.035)
+	motes.Transparency = NumberSequence.new(0.2, 1)
+	motes.Lifetime = NumberRange.new(2, 3)
+	motes.Rate = 10
+	motes.Speed = NumberRange.new(0)
+	motes.Acceleration = Vector3.new(0, size.Y * 0.25, 0)
+	motes.LightEmission = 1
+	motes.Parent = holder
+
+	-- Flare flashes centred on the gem.
+	local gem
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name:find("^GemMid") then -- "GemMid" or Blender's "GemMid.001"
+			gem = d
+			break
+		end
+	end
+	local flarePoint = Instance.new("Attachment")
+	flarePoint.Parent = holder
+	flarePoint.WorldPosition = if gem then gem.Position else cf.Position
+	local flare = Instance.new("ParticleEmitter")
+	flare.Name = "Flare"
+	flare.Texture = SPARKLE
+	flare.Color = ColorSequence.new(Color3.new(1, 1, 1))
+	flare.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.3, size.Y * 0.5),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	flare.Lifetime = NumberRange.new(0.5)
+	flare.Rate = 1.5
+	flare.Speed = NumberRange.new(0)
+	flare.Rotation = NumberRange.new(0, 90)
+	flare.LockedToPart = true
+	flare.LightEmission = 1
+	flare.Parent = flarePoint
+end
+
+local function buildArtPet(template, petData, withEffects, art)
 	local model = template:Clone()
 	if not model:IsA("Model") then
 		local wrapper = Instance.new("Model")
@@ -121,11 +215,17 @@ local function buildArtPet(template, petData, withEffects)
 			d.CanQuery = false
 			d.CanTouch = false
 			d.CastShadow = false
-			if petData.Golden and not d.Name:find("^Eyes") then -- gold all over, but keep the eyes
+			if petData.Golden and not d.Name:find("Eye") then -- gold all over, but keep the eyes
 				if d:IsA("MeshPart") then
 					d.TextureID = ""
 				end
 				d.Color = GOLD
+			end
+			-- Crystal pieces are named for how see-through they are (tools/art/build_crystal_seraph.py).
+			if d.Name:find("Beam") then
+				d.Transparency = 0.45
+			elseif d.Name:find("Glass") then
+				d.Transparency = 0.12
 			end
 			if not biggest or d.Size.Magnitude > biggest.Size.Magnitude then
 				biggest = d
@@ -133,7 +233,7 @@ local function buildArtPet(template, petData, withEffects)
 		end
 	end
 	local _, size = model:GetBoundingBox()
-	model:ScaleTo(model:GetScale() * ART_HEIGHT / math.max(size.Y, 0.1))
+	model:ScaleTo(model:GetScale() * ART_HEIGHT * (if petData.Rarity == "Secret" then SECRET_SCALE else 1) / math.max(size.Y, 0.1))
 	local center = model:GetBoundingBox()
 	model.WorldPivot = CFrame.new(center.Position)
 	model:PivotTo(model:GetPivot() * CFrame.Angles(0, ART_YAW, 0))
@@ -151,6 +251,9 @@ local function buildArtPet(template, petData, withEffects)
 		sparkles.LightEmission = 0.8
 		sparkles.Parent = biggest
 	end
+	if withEffects and art and art.Aura then
+		addAura(model)
+	end
 	return model
 end
 
@@ -162,8 +265,13 @@ function PetModelFactory.Create(petData, options)
 	local art = GameConfig.PetArt[petData.Name]
 	local artFolder = ReplicatedStorage:FindFirstChild("ArtPets")
 	local template = art and artFolder and artFolder:FindFirstChild(art.Model)
+	-- Some pets have their own Shiny colorway model (<Model>_Shiny).
+	local shinyTemplate = template and petData.Shiny and artFolder:FindFirstChild(art.Model .. "_Shiny")
+	if shinyTemplate then
+		template = shinyTemplate
+	end
 	if template then
-		return buildArtPet(template, petData, withEffects)
+		return buildArtPet(template, petData, withEffects, art)
 	end
 
 	local look = LOOKS[petData.Name] or fallbackLook(petData.Name)
@@ -174,7 +282,7 @@ function PetModelFactory.Create(petData, options)
 	if petData.Golden then
 		main, accent = GOLD, GOLD_LIGHT
 	end
-	local glowAccent = petData.Golden or petData.Rarity == "Legendary" or SPARKLY[petData.Rarity] == true
+	local glowAccent = petData.Golden or petData.Rarity == "Legendary" or petData.Rarity == "Secret" or SPARKLY[petData.Rarity] == true
 
 	local model = Instance.new("Model")
 	model.Name = petData.Name
@@ -343,9 +451,9 @@ function PetModelFactory.Create(petData, options)
 	end
 
 	model.PrimaryPart = body
-	model:ScaleTo(0.8) -- keeps cube pets about as tall as the old critters next to a player
+	model:ScaleTo(0.8 * (if petData.Rarity == "Secret" then SECRET_SCALE else 1)) -- about as tall as the old critters (Secrets bigger)
 
-	-- Golden and Mythic pets sparkle (in the world; icons skip effects).
+	-- Golden, Shiny and Mythic pets sparkle (in the world; icons skip effects).
 	if withEffects and (petData.Golden or petData.Shiny or SPARKLY[petData.Rarity]) then
 		local attachment = Instance.new("Attachment")
 		attachment.Position = V(0, 0.8, 0)

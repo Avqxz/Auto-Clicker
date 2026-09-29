@@ -1,6 +1,7 @@
--- The egg UI (EggUI) and everything the player does with an egg: walking up to a pedestal opens a
--- panel with the egg, its price, the pets it can hatch with their odds (including your luck), and the
--- Hatch 1 / Hatch 3 / Auto buttons; walking away closes it. The panel is built once and refilled
+-- The egg UI and everything the player does with an egg: walking up to a pedestal opens a panel
+-- floating above the egg (EggBoard, a BillboardGui) with the egg, its price, the pets it can hatch
+-- with their odds (including your luck), and the Hatch 1 / Hatch 3 / Auto buttons; walking away
+-- closes it. The panel is built once and refilled
 -- for whichever egg is nearest. Hatches go to the server (RequestHatch), which decides the pets; the
 -- result is played by HatchAnimationController.
 --
@@ -21,6 +22,7 @@ local EggConfig = require(Modules.EggConfig)
 local PetConfig = require(Modules.PetConfig)
 local HatchMath = require(Modules.HatchMath)
 local HatchAnimationController = require(script.Parent.HatchAnimationController)
+local PetModelFactory = require(Modules.PetModelFactory)
 
 local EggInteractionController = {}
 
@@ -113,15 +115,38 @@ function EggInteractionController.Start(deps)
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = playerGui
 
+	-- The panel floats above the egg in the world: a BillboardGui on the egg's pedestal (always drawn
+	-- over the scenery so trees can't cut into it), shrinking with distance like the egg does.
+	-- Warnings and the Auto Hatch indicator stay on screen (gui above).
+	local board = Instance.new("BillboardGui")
+	board.Name = "EggBoard"
+	board.ResetOnSpawn = false
+	board.Size = UDim2.fromOffset(PANEL_WIDTH + 24, PANEL_HEIGHT + 24)
+	board.AlwaysOnTop = true
+	board.LightInfluence = 0
+	board.MaxDistance = 250
+	board.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	board.Enabled = false
+	board.Parent = playerGui
+	local holder = Instance.new("Frame") -- scaled with distance; the panel's own UIScale animates opening
+	holder.Name = "Holder"
+	holder.AnchorPoint = Vector2.new(0.5, 0.5) -- scales around the middle, over the egg
+	holder.Position = UDim2.fromScale(0.5, 0.5)
+	holder.Size = UDim2.fromScale(1, 1)
+	holder.BackgroundTransparency = 1
+	holder.Parent = board
+	local distanceScale = Instance.new("UIScale")
+	distanceScale.Parent = holder
+
 	local root = Instance.new("CanvasGroup")
 	root.Name = "EggPanel"
 	root.AnchorPoint = Vector2.new(0.5, 0.5)
-	root.Position = UDim2.fromScale(0.5, 0.52)
+	root.Position = UDim2.fromScale(0.5, 0.5)
 	root.Size = UDim2.fromOffset(PANEL_WIDTH, PANEL_HEIGHT)
 	root.BackgroundTransparency = 1
 	root.GroupTransparency = 1
 	root.Visible = false
-	root.Parent = gui
+	root.Parent = holder
 	corner(root, 22)
 	-- The colored rim is its own frame: a UIGradient directly on a CanvasGroup would tint everything in it.
 	local rim = Instance.new("Frame")
@@ -138,12 +163,13 @@ function EggInteractionController.Start(deps)
 	-- Soft drop shadow behind the panel (outside the CanvasGroup so it isn't clipped).
 	local shadow = Instance.new("Frame")
 	shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+	shadow.Position = UDim2.fromScale(0.5, 0.5)
 	shadow.Size = UDim2.fromOffset(PANEL_WIDTH + 14, PANEL_HEIGHT + 14)
 	shadow.BackgroundColor3 = Color3.new(0, 0, 0)
 	shadow.BackgroundTransparency = 1
 	shadow.ZIndex = 0
 	shadow.Visible = false
-	shadow.Parent = gui
+	shadow.Parent = holder
 	corner(shadow, 28)
 	local shadowScale = Instance.new("UIScale")
 	shadowScale.Parent = shadow
@@ -495,7 +521,35 @@ function EggInteractionController.Start(deps)
 				local art = GameConfig.PetArt[pet.Name]
 				cell.Icon.Image = art and art.Icon or ""
 				cell.Icon.ImageColor3 = if hidden then Color3.new(0, 0, 0) else WHITE
-				cell.Mystery.Visible = hidden or not (art and art.Icon)
+				-- No icon image: a live 3D view of the pet instead (silhouetted the same way).
+				if not (art and art.Icon) and cell.ViewName ~= pet.Name then
+					if cell.View then cell.View:Destroy() end
+					local view = Instance.new("ViewportFrame")
+					view.BackgroundTransparency = 1
+					view.AnchorPoint = Vector2.new(0.5, 0)
+					view.Position = UDim2.new(0.5, 0, 0, 3)
+					view.Size = UDim2.fromOffset(56, 56)
+					view.Ambient = Color3.fromRGB(190, 190, 200)
+					view.LightDirection = Vector3.new(-0.35, -0.6, 1)
+					local model = PetModelFactory.Create({ Name = pet.Name, Rarity = pet.Rarity, Golden = false }, { WithEffects = false })
+					model:PivotTo(CFrame.new())
+					model.Parent = view
+					local _, size = model:GetBoundingBox()
+					local camera = Instance.new("Camera")
+					camera.FieldOfView = 40
+					camera.CFrame = CFrame.lookAt(Vector3.new(0, size.Y * 0.1, -math.max(size.X, size.Y) * 1.6), Vector3.zero)
+					camera.Parent = view
+					view.CurrentCamera = camera
+					view.Parent = cell.Frame
+					cell.View, cell.ViewName = view, pet.Name
+				elseif art and art.Icon and cell.View then
+					cell.View:Destroy()
+					cell.View, cell.ViewName = nil, nil
+				end
+				if cell.View then
+					cell.View.ImageColor3 = if hidden then Color3.new(0, 0, 0) else WHITE
+				end
+				cell.Mystery.Visible = hidden or not (art and art.Icon or cell.View)
 				cell.Chance.Text = HatchMath.FormatChance(chances[i])
 				cell.Rarity.Text = if hidden then "???" else string.upper(tier.Id)
 				cell.Rarity.TextColor3 = if tier.Rainbow then Color3.fromRGB(150, 60, 220) else tier.Color:Lerp(INK, 0.25)
@@ -531,15 +585,24 @@ function EggInteractionController.Start(deps)
 		eggView.Parent = eggHolder
 	end
 
-	-- Fit the panel on small screens.
-	local function fit()
-		local size = workspace.CurrentCamera.ViewportSize
-		fitScale = math.min(1, (size.X - 24) / PANEL_WIDTH, (size.Y - 90) / PANEL_HEIGHT)
-		shadow.Position = root.Position
+	-- The pedestal an egg's panel floats over.
+	local function pedestalFor(egg)
+		for _, pedestal in ipairs(CollectionService:GetTagged("EggPedestal")) do
+			if pedestal:GetAttribute("EggId") == egg.Id and pedestal:IsDescendantOf(workspace) then
+				return pedestal
+			end
+		end
+	end
+	-- Shrink with distance like a world object, but never bigger than 85% of the screen's height.
+	local function updateDistanceScale()
+		local adornee = board.Adornee
+		if not adornee then return end
+		local camera = workspace.CurrentCamera
+		local distance = (camera.CFrame.Position - adornee.Position).Magnitude
+		local fitScreen = camera.ViewportSize.Y * 0.85 / (PANEL_HEIGHT + 24)
+		distanceScale.Scale = math.clamp(22 / math.max(distance, 1), 0.35, math.min(1, fitScreen))
 		shadowScale.Scale = rootScale.Scale
 	end
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-	fit()
 
 	-- Opening: scale 90% -> 100%, fade in, then the buttons bounce in one after another.
 	local function open(egg)
@@ -548,11 +611,17 @@ function EggInteractionController.Start(deps)
 		setEggModel(egg)
 		refresh()
 		ProximityPromptService.Enabled = false -- E is Hatch while the egg UI is open
+		local pedestal = pedestalFor(egg)
+		if pedestal then
+			board.Adornee = pedestal
+			board.StudsOffsetWorldSpace = Vector3.new(0, 1.5, 0) -- centered just above the egg
+		end
+		board.Enabled = true
+		updateDistanceScale()
 		if root.Visible and not switching then return end
 		deletePanel.Visible = false
 		root.Visible = true
 		shadow.Visible = true
-		fit()
 		rootScale.Scale = fitScale * 0.9
 		root.GroupTransparency = 1
 		shadow.BackgroundTransparency = 1
@@ -588,6 +657,7 @@ function EggInteractionController.Start(deps)
 			if root.GroupTransparency > 0.99 then
 				root.Visible = false
 				shadow.Visible = false
+				board.Enabled = false
 			end
 		end)
 		currentEgg = nil
@@ -652,7 +722,9 @@ function EggInteractionController.Start(deps)
 			return result
 		end
 		deps.playSound("Purchase")
+		board.Enabled = false -- the reveal hides the screen UI; the floating panel goes too
 		animation.Play(result, egg, { Fast = isAuto })
+		board.Enabled = root.Visible
 		refresh()
 		return result
 	end
@@ -748,6 +820,9 @@ function EggInteractionController.Start(deps)
 	RunService.Heartbeat:Connect(function(dt)
 		if eggModel and root.Visible then
 			eggModel.CFrame = CFrame.Angles(0, os.clock() * 0.9, 0) * CFrame.new(0, math.sin(os.clock() * 2) * 0.12, 0)
+		end
+		if board.Enabled then
+			updateDistanceScale()
 		end
 		elapsed += dt
 		if elapsed < 0.15 then return end

@@ -22,6 +22,8 @@ def srgb(c):
 def main():
     manifest = json.loads((EXPORTS / 'manifest.json').read_text())
     files = ['World_Assembled'] + [m['file'][:-4] for m in manifest if m['file'].startswith(('Pet_', 'Props_', 'Variant_'))]
+    # Pets built separately after the art package (tools/art/build_*.py), e.g. Pet_Secret_CrystalSeraph.
+    files += sorted(f.stem for f in EXPORTS.glob('Pet_Secret_*.fbx'))
     palette, models = {}, {}
     for stem in files:
         data = fbxread.load(EXPORTS / (stem + '.fbx'))
