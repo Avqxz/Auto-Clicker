@@ -61,7 +61,7 @@ local AnnouncementRemote=createRemoteEvent("Announcement")
 local RedeemCodeRemote=createRemoteEvent("RedeemCode")
 local RequestDataRemote=createRemoteEvent("RequestData")
 local PromoCodes=require(script.PromoCodes)
-local lastClickTimes = {}
+local lastClickTimes = {} -- [userId] = click token bucket { Tokens, Last }
 local comboStates = {} -- [userId] = { Count, Last }
 local burstCounters = {} -- [userId] = clicks counted toward gear bursts
 local bossFights = {} -- [userId] = { Boss, Health, Ends }
@@ -448,12 +448,19 @@ end)
 -- combo tier's multiplier, and rolls for a crit. The client only displays the result.
 
 local function handleClick(player)
+	-- Token bucket: refills one click per ClickCooldown, holds up to ClickBurst. Extra clicks are ignored.
 	local now = os.clock()
-	local last = lastClickTimes[player.UserId]
-	if last and now - last < GameConfig.ClickCooldown then
+	local bucket = lastClickTimes[player.UserId]
+	if not bucket then
+		bucket = { Tokens = GameConfig.ClickBurst, Last = now }
+		lastClickTimes[player.UserId] = bucket
+	end
+	bucket.Tokens = math.min(GameConfig.ClickBurst, bucket.Tokens + (now - bucket.Last) / GameConfig.ClickCooldown)
+	bucket.Last = now
+	if bucket.Tokens < 1 then
 		return
 	end
-	lastClickTimes[player.UserId] = now
+	bucket.Tokens -= 1
 
 	local data = PlayerData.Get(player)
 	if not data then
@@ -796,7 +803,9 @@ local function addClickDetector(part, maxDistance)
 	return detector
 end
 
-addClickDetector(mapRefs.ClickOrb).MouseClick:Connect(handleClick)
+-- The orb's detector is just for the hand cursor: the click itself is a screen click, which the client
+-- sends through the Click remote like any other (awarding it here too would count it twice).
+addClickDetector(mapRefs.ClickOrb)
 -- Pack stations (treasure chest -> Daily Rewards, enchanting table -> Token Shop) open their panel.
 for kind, prompt in pairs(mapRefs.Stations or {}) do
 	prompt.Triggered:Connect(function(player)

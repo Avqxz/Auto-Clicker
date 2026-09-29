@@ -1081,6 +1081,10 @@ end
 
 -- ===== Interactions =====
 
+-- Every click goes through localClick (defined with the CLICK button below): instant feedback on the
+-- client, Power requested only at the rate the server awards it.
+local localClick
+
 -- Click anywhere on screen (not just a dedicated button). gameProcessedEvent
 -- is true when the input already hit a GuiButton (Shop/Eggs/Pets/Ascend/etc),
 -- so this only fires for clicks/taps on empty space.
@@ -1089,11 +1093,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 		return
 	end
 
-	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+	if not localClick or (input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch) then
 		return
 	end
 
-	ClickRemote:FireServer() -- the result (amount, crit, combo) comes back via ClickResult
+	local inset = game:GetService("GuiService"):GetGuiInset()
+	localClick(Vector2.new(input.Position.X, input.Position.Y) - (if screenGui.IgnoreGuiInset then Vector2.zero else inset))
 end)
 
 rebirthButton.MouseButton1Click:Connect(function()
@@ -1168,8 +1173,9 @@ tapButton.Position=UDim2.new(0.5,0,1,-18) tapButton.Size=UDim2.fromOffset(236,64
 tapButton.BackgroundColor3=Color3.fromRGB(0,216,243) tapButton.Text="CLICK!"
 tapButton.TextColor3=Color3.new(1,1,1) tapButton.TextScaled=true tapButton.Parent=screenGui
 Instance.new("UICorner",tapButton).CornerRadius=UDim.new(0,18) styleButton(tapButton)
+local function tapCenter() return tapButton.AbsolutePosition+tapButton.AbsoluteSize/2 end
 tapButton.Activated:Connect(function()
- ClickRemote:FireServer()
+ localClick(tapCenter())
 end)
 -- Hold-to-click: after a short delay, keep clicking at HoldClicksPerSecond while held.
 local holding,holdToken=false,0
@@ -1177,7 +1183,7 @@ tapButton.MouseButton1Down:Connect(function()
  holding=true holdToken+=1
  local myHold=holdToken -- a quick re-press must not start a second loop
  task.delay(0.35,function()
-  while holding and holdToken==myHold do ClickRemote:FireServer() task.wait(1/GameConfig.HoldClicksPerSecond) end
+  while holding and holdToken==myHold do localClick(tapCenter()) task.wait(1/GameConfig.HoldClicksPerSecond) end
  end)
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -1226,7 +1232,6 @@ local function playSound(kind)
  sound.Parent=SoundService
  sound:Play() Debris:AddItem(sound,8)
 end
-local lastSound=0
 require(script.ClickFeel).Start({
  screenGui=screenGui,
  resultRemote=Remotes:WaitForChild("ClickResult"),
@@ -1234,13 +1239,34 @@ require(script.ClickFeel).Start({
  getComboWindow=function() return comboWindow end,
  isReducedMotion=function() return reducedMotion end,
 })
-ClickRemote.OnClientEvent:Connect(function() end)
-tapButton.Activated:Connect(function() playSound("Click") end)
-UserInputService.InputBegan:Connect(function(input,processed)
- if not processed and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch) and os.clock()-lastSound>0.08 then
-  lastSound=os.clock() playSound("Click")
+-- A click, however fast: its sound, a squash of the CLICK button and a sparkle burst at `at` (a GUI
+-- position) always play. Power is requested at most as fast as the server awards it
+-- (GameConfig.ClickCooldown); the "+N" numbers and combo come back from the server for those.
+local clickTokens,clickRefill=2,os.clock()
+local tapBaseSize=tapButton.Size
+localClick=function(at)
+ playSound("Click")
+ tapButton.Size=UDim2.fromOffset(tapBaseSize.X.Offset*0.93,tapBaseSize.Y.Offset*0.86)
+ TweenService:Create(tapButton,TweenInfo.new(0.2,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=tapBaseSize}):Play()
+ for _=1,(reducedMotion and 2 or 6) do
+  local spark=Instance.new("ImageLabel") spark.BackgroundTransparency=1
+  spark.Image="rbxasset://textures/particles/sparkles_main.dds"
+  spark.ImageColor3=if math.random()<0.5 then Color3.fromRGB(255,225,90) else Color3.fromRGB(120,230,255)
+  local px=math.random(12,22) spark.Size=UDim2.fromOffset(px,px) spark.AnchorPoint=Vector2.new(0.5,0.5)
+  spark.Position=UDim2.fromOffset(at.X,at.Y) spark.ZIndex=2 spark.Parent=screenGui
+  local angle=math.random()*math.pi*2 local reach=math.random(30,60)
+  TweenService:Create(spark,TweenInfo.new(0.35+math.random()*0.15,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+   Position=UDim2.fromOffset(at.X+math.cos(angle)*reach,at.Y+math.sin(angle)*reach),
+   ImageTransparency=1,Rotation=math.random(-120,120)}):Play()
+  Debris:AddItem(spark,0.55)
  end
-end)
+ local now=os.clock()
+ clickTokens=math.min(2,clickTokens+(now-clickRefill)/GameConfig.ClickCooldown) clickRefill=now
+ if clickTokens>=1 then
+  clickTokens-=1
+  ClickRemote:FireServer() -- the result (amount, crit, combo) comes back via ClickResult
+ end
+end
 local controls=Instance.new("Frame") controls.Name="UtilityControls" controls.BackgroundTransparency=1
 controls.AnchorPoint=Vector2.new(1,0) controls.Position=UDim2.new(1,-10,0,10) controls.Size=UDim2.fromOffset(106,154) controls.Parent=screenGui
 -- Callers pass y on a 54px grid; buttons are laid out tighter (40px tall, 46px apart) so the full

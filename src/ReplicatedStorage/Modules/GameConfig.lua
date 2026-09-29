@@ -11,7 +11,11 @@ local PetConfig = require(script.Parent.PetConfig)
 local GameConfig = {}
 
 GameConfig.StartingClickPower = 1
-GameConfig.ClickCooldown = 0.08 -- seconds; server-side anti-exploit throttle
+-- Clicks award Power at most once per ClickCooldown seconds (10 per second), on the server. Faster
+-- clicking still plays every click's sound, button squash and sparkles on the client; it just doesn't
+-- earn more. ClickBurst lets a few clicks bunch up so network jitter never drops a steady 10 CPS.
+GameConfig.ClickCooldown = 0.1
+GameConfig.ClickBurst = 3
 
 GameConfig.Upgrades = {
 	{
@@ -218,8 +222,8 @@ GameConfig.StarterPets = {
 
 -- Players see this as "Ascension"; the save keeps the original RebirthCount field.
 GameConfig.Rebirth = {
-	BaseRequirement = 1500,
-	RequirementMultiplier = 3,
+	BaseRequirement = 5000, -- Power needed for the first Ascension
+	RequirementMultiplier = 4, -- each Ascension needs this many times more
 	MultiplierPerRebirth = 1, -- +100% coin gain per Ascension
 	BaseGems = 10, -- Gems for ascending at exactly the requirement on the first Ascension
 }
