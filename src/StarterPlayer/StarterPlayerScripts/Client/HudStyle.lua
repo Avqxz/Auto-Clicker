@@ -19,7 +19,8 @@ local HudStyle = {}
 local FONT = Enum.Font.FredokaOne
 local WHITE = Color3.new(1, 1, 1)
 local INK = Color3.fromRGB(22, 32, 58)
-local CURSOR_ICON = "rbxassetid://79231008605619"
+local CURSOR_ICON = "rbxassetid://79231008605619" -- tools/art/make_cursor_icon.py
+local SHOP_ICON = "rbxassetid://110488612009893" -- tools/art/make_shop_icon.py
 
 local function corner(parent, radius)
 	local c = parent:FindFirstChildOfClass("UICorner") or Instance.new("UICorner")
@@ -118,6 +119,9 @@ local function tile(button, icon, caption, color, size)
 	corner(gloss, 12)
 	if icon == "cursor" then
 		cursorIcon(button, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.46), Size = UDim2.fromScale(0.72, 0.72) })
+	elseif icon and icon:match("^rbxassetid://") then -- a drawn icon, big enough to poke past the top edge
+		cursorIcon(button, { Image = icon, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.38),
+			Size = UDim2.fromScale(1.02, 1.02) })
 	elseif icon then
 		glyph(button, icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromScale(0.62, 0.62) })
 	end
@@ -145,9 +149,16 @@ function HudStyle.Apply(deps)
 	local groups = {} -- containers scaled down on small screens: { frame, scale, compactScale }
 
 	-- ===== Top counters =====
+	-- Replaced by the new counters, potions and progress bar; kept hidden even when their own code
+	-- shows them again (the boost timer text does whenever a boost starts).
 	for _, name in ipairs({ "CoinFrame", "CoinPill", "GemFrame", "BoostTimers", "Tip" }) do
 		local old = find(name)
-		if old then old.Visible = false end
+		if old then
+			old.Visible = false
+			old:GetPropertyChangedSignal("Visible"):Connect(function()
+				if old.Visible then old.Visible = false end
+			end)
+		end
 	end
 	local top = Instance.new("Frame")
 	top.Name = "TopCounters"
@@ -213,8 +224,8 @@ function HudStyle.Apply(deps)
 	local grid = Instance.new("Frame")
 	grid.Name = "MenuGrid"
 	grid.AnchorPoint = Vector2.new(0, 0.5)
-	grid.Position = UDim2.new(0, 12, 0.5, 10)
-	grid.Size = UDim2.fromOffset(84 * 2 + 12, 84 * 4 + 12 * 3 + 10)
+	grid.Position = UDim2.new(0, 12, 0.5, -10)
+	grid.Size = UDim2.fromOffset(84 * 2 + 12, 84 * 5 + 12 * 4 + 10)
 	grid.BackgroundTransparency = 1
 	grid.Parent = gui
 	local gridLayout = Instance.new("UIGridLayout")
@@ -234,9 +245,17 @@ function HudStyle.Apply(deps)
 		button.Parent = grid
 		return tile(button, icon, caption, color)
 	end
-	place(find("ShopToggle"), "⬆️", "Upgrades", Color3.fromRGB(80, 215, 120))
-	place(find("EggsToggle"), "🥚", "Eggs", Color3.fromRGB(40, 200, 235))
+	local cart = find("CartButton")
+	if cart then
+		for _, child in ipairs(cart:GetChildren()) do
+			if child:IsA("TextLabel") then child:Destroy() end -- its own 🛒 and STORE tag
+		end
+		cart.Rotation = 0
+		place(cart, SHOP_ICON, "Shop", Color3.fromRGB(255, 205, 40))
+	end
 	place(find("PetsToggle"), "🐶", "Pets", Color3.fromRGB(205, 115, 245))
+	place(find("EggsToggle"), "🥚", "Eggs", Color3.fromRGB(40, 200, 235))
+	place(find("ShopToggle"), "⬆️", "Upgrades", Color3.fromRGB(80, 215, 120))
 	place(find("GearToggle"), "⚔️", "Gear", Color3.fromRGB(240, 90, 110))
 	place(find("SkillsToggle"), "🌟", "Skills", Color3.fromRGB(255, 170, 60))
 	place(find("RebirthButton"), "🔄", "Ascend", Color3.fromRGB(235, 70, 150))
@@ -245,82 +264,34 @@ function HudStyle.Apply(deps)
 	local tabBar = find("TabBar")
 	if tabBar then tabBar.Visible = false end
 
-	-- ===== Right side: Store, Rewards, round quick buttons =====
-	local right = Instance.new("Frame")
-	right.Name = "RightHud"
-	right.AnchorPoint = Vector2.new(1, 0.5)
-	right.Position = UDim2.new(1, -14, 0.5, 20)
-	right.Size = UDim2.fromOffset(250, 250)
-	right.BackgroundTransparency = 1
-	right.Parent = gui
-	local rightScale = Instance.new("UIScale", right)
-	table.insert(groups, { right, rightScale, 0.72 })
-
-	local cart = find("CartButton")
-	if cart then
-		cart.AnchorPoint = Vector2.new(1, 0)
-		cart.Position = UDim2.new(1, 0, 0, 0)
-		cart.Size = UDim2.fromOffset(78, 78)
-		cart.Parent = right
-		for _, s in ipairs(cart:GetChildren()) do
-			if s:IsA("UIStroke") then s.Color = INK s.Thickness = 3 s.Transparency = 0 end
-		end
-	end
-
-	local daily = utility("DAILY")
-	if daily then
-		daily.Parent = right
-		daily.AnchorPoint = Vector2.new(1, 0)
-		daily.Position = UDim2.new(1, 0, 0, 92)
-		tile(daily, nil, nil, Color3.fromRGB(120, 225, 110), UDim2.fromOffset(220, 70))
-		corner(daily, 20)
-		glyph(daily, "🎁", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 22, 0.5, -4),
-			Size = UDim2.fromOffset(82, 82), Rotation = -8, ZIndex = 4 })
-		inkText(daily, { Name = "Caption", Position = UDim2.new(0, 64, 0, 10), Size = UDim2.new(1, -74, 1, -20),
-			Text = "Rewards", StrokeThickness = 3, ZIndex = 4 })
-	end
-
-	local row = Instance.new("Frame")
-	row.Name = "QuickButtons"
-	row.AnchorPoint = Vector2.new(1, 0)
-	row.Position = UDim2.new(1, 0, 0, 178)
-	row.Size = UDim2.fromOffset(250, 60)
-	row.BackgroundTransparency = 1
-	row.Parent = right
-	local rowLayout = Instance.new("UIListLayout")
-	rowLayout.FillDirection = Enum.FillDirection.Horizontal
-	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	rowLayout.Padding = UDim.new(0, 8)
-	rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	rowLayout.Parent = row
-	local function round(button, icon, color, n, mirror)
+	-- ===== Top-right: Rewards, Settings, Codes =====
+	local corner3 = Instance.new("Frame")
+	corner3.Name = "TopRight"
+	corner3.AnchorPoint = Vector2.new(1, 0)
+	corner3.Position = UDim2.new(1, -12, 0, 8)
+	corner3.Size = UDim2.fromOffset(84 * 3 + 10 * 2, 96)
+	corner3.BackgroundTransparency = 1
+	corner3.Parent = gui
+	local cornerLayout = Instance.new("UIListLayout", corner3)
+	cornerLayout.FillDirection = Enum.FillDirection.Horizontal
+	cornerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	cornerLayout.Padding = UDim.new(0, 10)
+	cornerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	local cornerScale = Instance.new("UIScale", corner3)
+	table.insert(groups, { corner3, cornerScale, 0.72 })
+	local function cornerTile(button, n, icon, caption, color)
 		if not button then return end
 		button.LayoutOrder = n
-		button.Parent = row
-		tile(button, icon, nil, color, UDim2.fromOffset(54, 54))
-		corner(button)
-		if mirror then -- icon follows the button's (hidden) ON/OFF text
-			local label = button:FindFirstChild("Icon")
-			local function sync() label.Text = mirror(button.Text) end
-			button:GetPropertyChangedSignal("Text"):Connect(sync)
-			sync()
-		end
+		button.Visible = true
+		button.Parent = corner3
+		tile(button, icon, caption, color)
 	end
-	round(utility("CODES"), "🏷️", Color3.fromRGB(45, 190, 210), 1)
-	round(utility("SOUND ON") or utility("SOUND OFF"), "🔊", Color3.fromRGB(70, 150, 180), 2,
-		function(t) return if t:find("OFF") then "🔇" else "🔊" end)
-	round(utility("FX ON") or utility("FX LOW"), "✨", Color3.fromRGB(140, 100, 195), 3,
-		function(t) return if t:find("LOW") then "💤" else "✨" end)
+	cornerTile(utility("DAILY"), 1, "🎁", "Rewards", Color3.fromRGB(110, 220, 100))
+	cornerTile(find("SettingsButton"), 2, "⚙️", "Settings", Color3.fromRGB(90, 170, 240))
+	cornerTile(utility("CODES"), 3, "🔤", "Codes", Color3.fromRGB(150, 110, 245))
+	-- Sound, effects and music now live in the Settings panel.
 	local music = find("MusicToggle")
-	if music then
-		music.LayoutOrder = 4
-		music.AnchorPoint = Vector2.new(0, 0)
-		music.Size = UDim2.fromOffset(54, 54)
-		music.Parent = row
-		for _, s in ipairs(music:GetChildren()) do
-			if s:IsA("UIStroke") then s.Color = INK s.Thickness = 3 s.Transparency = 0 end
-		end
-	end
+	if music then music.Visible = false end
 	deps.controls.Visible = false
 
 	-- ===== Bottom: big click button between SELL and AUTO =====
@@ -405,6 +376,39 @@ function HudStyle.Apply(deps)
 	local _, petValue = chip(2, "🐾")
 	local _, luckValue = chip(3, "🍀")
 	local powerChip, powerValue = chip(4, "⚡")
+	-- Boost "potions" (bottom-right): the timed 2x boosts, with their time left; tap to buy more.
+	local potions = Instance.new("Frame")
+	potions.Name = "BoostPotions"
+	potions.AnchorPoint = Vector2.new(1, 1)
+	potions.Position = UDim2.new(1, -12, 1, -14)
+	potions.Size = UDim2.fromOffset(84 * 2 + 10, 84)
+	potions.BackgroundTransparency = 1
+	potions.Parent = gui
+	local potionLayout = Instance.new("UIListLayout", potions)
+	potionLayout.FillDirection = Enum.FillDirection.Horizontal
+	potionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	potionLayout.Padding = UDim.new(0, 10)
+	local potionScale = Instance.new("UIScale", potions)
+	table.insert(groups, { potions, potionScale, 0.72 })
+	local potionTimers = {}
+	for n, def in ipairs({ { "Power", "2x Power", Color3.fromRGB(80, 170, 255) }, { "Luck", "2x Luck", Color3.fromRGB(90, 215, 110) } }) do
+		local b = Instance.new("TextButton")
+		b.Name = def[1] .. "Potion"
+		b.LayoutOrder = n
+		b.Text = ""
+		b.Parent = potions
+		tile(b, "🧪", def[2], def[3])
+		local timer = inkText(b, { Name = "Timer", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4),
+			Size = UDim2.fromOffset(70, 20), ZIndex = 5, Text = "" })
+		potionTimers[def[1]] = timer
+		b.Activated:Connect(function()
+			local shop = find("TokenShopFrame")
+			if not shop then return end
+			for _, panel in ipairs(deps.panels or {}) do panel.Visible = false end
+			shop.Visible = true
+		end)
+	end
+
 	local function clock(seconds)
 		seconds = math.max(0, math.floor(seconds))
 		return string.format("%d:%02d", seconds // 60, seconds % 60)
@@ -430,6 +434,11 @@ function HudStyle.Apply(deps)
 		local left = if powerEnds then powerEnds - os.time() else 0
 		powerChip.Visible = left > 0
 		powerValue.Text = "2x " .. clock(left)
+		for kind, timer in pairs(potionTimers) do
+			local ends = data.Boosts and data.Boosts[kind]
+			local remaining = if ends then ends - os.time() else 0
+			timer.Text = if remaining > 0 then clock(remaining) else ""
+		end
 	end
 	deps.dataChanged.OnClientEvent:Connect(function() task.defer(refresh) end)
 	task.spawn(function()
@@ -443,7 +452,7 @@ function HudStyle.Apply(deps)
 	local function fit()
 		local size = camera.ViewportSize
 		local compact = size.X < 900 or size.Y < 560
-		topScale.Scale = math.min(1, (size.X - 120) / top.Size.X.Offset)
+		topScale.Scale = math.min(1, (size.X - 2 * 300) / top.Size.X.Offset) -- room for the corner tiles
 		for _, g in ipairs(groups) do
 			g[2].Scale = if compact then g[3] else 1
 		end

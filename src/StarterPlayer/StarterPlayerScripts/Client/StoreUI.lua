@@ -73,42 +73,114 @@ function StoreUI.Build(deps)
 			end
 		end)
 
-		local frame, scroll = deps.createPanel("StoreFrame", "Store")
+		local frame, scroll = deps.createPanel("StoreFrame", "Shop")
 		deps.registerPanel(frame)
 		deps.bindTab(cart, frame)
 
-		local order = 0
-		local function section(title)
-			order += 1
-			text(scroll, { Size = UDim2.new(1, 0, 0, 28), TextScaled = true, LayoutOrder = order, Text = title,
-				TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(0, 150, 190) })
+		-- Tabs (Gamepasses / Boosts) over a grid of pastel cards: name, big icon, green price pill.
+		local INK = Color3.fromRGB(22, 32, 58)
+		local ICONS = { AutoClick = "👆", TripleHatch = "🥚", AutoHatch = "🤖", PetSlots = "🐾", Lucky = "🍀",
+			FastHatch = "⏱️", VIP = "👑", PowerBoost15 = "⚡", LuckBoost15 = "🍀", BossRetry = "⚔️", TokenPack = "🎟️" }
+		local CARD_COLORS = { Color3.fromRGB(255, 232, 120), Color3.fromRGB(255, 170, 200), Color3.fromRGB(170, 225, 255),
+			Color3.fromRGB(170, 240, 150), Color3.fromRGB(200, 180, 255), Color3.fromRGB(255, 200, 150) }
+		local function outline(object, thickness)
+			local stroke = Instance.new("UIStroke", object)
+			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			stroke.Color = INK
+			stroke.Thickness = thickness or 2.5
 		end
-		local function row(item, isPass)
+		local function inkText(parent, props)
+			local l = text(parent, props)
+			l.TextColor3 = props.TextColor3 or Color3.new(1, 1, 1)
+			local stroke = Instance.new("UIStroke", l)
+			stroke.Color = INK
+			stroke.Thickness = 2
+			return l
+		end
+
+		local tabs = Instance.new("Frame")
+		tabs.Size = UDim2.new(1, 0, 0, 38)
+		tabs.BackgroundTransparency = 1
+		tabs.LayoutOrder = 1
+		tabs.Parent = scroll
+		local tabLayout = Instance.new("UIListLayout", tabs)
+		tabLayout.FillDirection = Enum.FillDirection.Horizontal
+		tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		tabLayout.Padding = UDim.new(0, 8)
+		local grids, tabButtons = {}, {}
+		local function showTab(name)
+			for n, g in pairs(grids) do g.Visible = n == name end
+			for n, b in pairs(tabButtons) do
+				b.BackgroundColor3 = if n == name then Color3.fromRGB(40, 130, 240) else Color3.fromRGB(120, 170, 235)
+			end
+		end
+		local function tab(name, order)
+			local b = Instance.new("TextButton")
+			b.LayoutOrder = order
+			b.Size = UDim2.fromOffset(150, 34)
+			b.AutoButtonColor = false
+			b.Font = Enum.Font.FredokaOne
+			b.TextScaled = true
+			b.TextColor3 = Color3.new(1, 1, 1)
+			b.Text = name
+			b.Parent = tabs
+			Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
+			outline(b, 2.5)
+			local pad = Instance.new("UIPadding", b)
+			pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 5), UDim.new(0, 5)
+			local stroke = Instance.new("UIStroke", b)
+			stroke.Color = INK
+			stroke.Thickness = 1.8
+			tabButtons[name] = b
+			local grid = Instance.new("Frame")
+			grid.Size = UDim2.new(1, 0, 0, 0)
+			grid.AutomaticSize = Enum.AutomaticSize.Y
+			grid.BackgroundTransparency = 1
+			grid.LayoutOrder = 2
+			grid.Parent = scroll
+			local layout = Instance.new("UIGridLayout", grid)
+			layout.CellSize = UDim2.new(1 / 3, -8, 0, 150)
+			layout.CellPadding = UDim2.fromOffset(10, 12)
+			layout.SortOrder = Enum.SortOrder.LayoutOrder
+			grids[name] = grid
+			b.Activated:Connect(function() showTab(name) end)
+			return grid
+		end
+
+		local cardIndex = 0
+		local function card(grid, item, isPass)
 			if item.Id == 0 and not isStudio then return end
-			order += 1
-			local card = Instance.new("Frame")
-			card.Size = UDim2.new(1, 0, 0, 70)
-			card.BackgroundColor3 = Color3.fromRGB(225, 246, 249)
-			card.LayoutOrder = order
-			card.Parent = scroll
-			Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-			text(card, { Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -170, 0, 26), TextScaled = true,
-				TextXAlignment = Enum.TextXAlignment.Left, Text = item.Name })
-			text(card, { Position = UDim2.fromOffset(10, 36), Size = UDim2.new(1, -170, 0, 28), TextSize = 14,
-				TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = MUTED,
-				Text = item.Description or ("Double " .. (item.Boost or "") .. " for " .. (item.Minutes or 0) .. " minutes") })
+			cardIndex += 1
+			local c = Instance.new("Frame")
+			c.LayoutOrder = cardIndex
+			c.BackgroundColor3 = CARD_COLORS[(cardIndex - 1) % #CARD_COLORS + 1]
+			c.Parent = grid
+			Instance.new("UICorner", c).CornerRadius = UDim.new(0, 16)
+			outline(c, 3)
+			local g = Instance.new("UIGradient", c)
+			g.Rotation = 90
+			g.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(215, 215, 225))
+			inkText(c, { Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 24), TextScaled = true, Text = item.Name })
+			text(c, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.47), Size = UDim2.fromOffset(62, 62),
+				TextScaled = true, Text = ICONS[item.Key] or "⭐" })
 			local buy = Instance.new("TextButton")
-			buy.AnchorPoint = Vector2.new(1, 0.5)
-			buy.Position = UDim2.new(1, -10, 0.5, 0)
-			buy.Size = UDim2.fromOffset(148, 48)
+			buy.AnchorPoint = Vector2.new(0.5, 1)
+			buy.Position = UDim2.new(0.5, 0, 1, -8)
+			buy.Size = UDim2.new(0.78, 0, 0, 32)
+			buy.AutoButtonColor = false
 			buy.Font = Enum.Font.FredokaOne
 			buy.TextScaled = true
 			buy.TextColor3 = Color3.new(1, 1, 1)
-			buy.BackgroundColor3 = if item.Id == 0 then GREY else GREEN
+			buy.BackgroundColor3 = if item.Id == 0 then GREY else Color3.fromRGB(60, 200, 90)
 			buy.Text = if item.Id == 0 then "ID not set" else "BUY"
-			buy.Parent = card
-			Instance.new("UICorner", buy).CornerRadius = UDim.new(0, 10)
-			deps.styleButton(buy)
+			buy.Parent = c
+			Instance.new("UICorner", buy).CornerRadius = UDim.new(1, 0)
+			outline(buy, 2.5)
+			local buyText = Instance.new("UIStroke", buy)
+			buyText.Color = INK
+			buyText.Thickness = 1.8
+			local buyPad = Instance.new("UIPadding", buy)
+			buyPad.PaddingTop, buyPad.PaddingBottom = UDim.new(0, 5), UDim.new(0, 5)
 			buy.MouseButton1Click:Connect(function()
 				if item.Id == 0 then return end
 				if isPass then
@@ -133,10 +205,11 @@ function StoreUI.Build(deps)
 			table.insert(rows, { Item = item, IsPass = isPass, Buy = buy })
 		end
 
-		section("GAMEPASSES")
-		for _, pass in ipairs(GameConfig.GamePasses) do row(pass, true) end
-		section("BOOSTS & PACKS")
-		for _, product in ipairs(GameConfig.DevProducts) do row(product, false) end
+		local passGrid = tab("Gamepasses", 1)
+		local boostGrid = tab("Boosts", 2)
+		for _, pass in ipairs(GameConfig.GamePasses) do card(passGrid, pass, true) end
+		for _, product in ipairs(GameConfig.DevProducts) do card(boostGrid, product, false) end
+		showTab("Gamepasses")
 	end
 
 	-- ===== AUTO click toggle (Auto Click pass) =====

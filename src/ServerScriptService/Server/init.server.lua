@@ -42,6 +42,8 @@ local DataUpdatedRemote = createRemoteEvent("DataUpdated")
 local EquipPetRemote = createRemoteEvent("EquipPet")
 local UnequipPetRemote = createRemoteEvent("UnequipPet")
 local FusePetsRemote = createRemoteEvent("FusePets")
+local EquipBestRemote = createRemoteEvent("EquipBest")
+local UnequipAllRemote = createRemoteEvent("UnequipAll")
 local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
 local ClickResultRemote = createRemoteEvent("ClickResult")
 local BossStateRemote = createRemoteEvent("BossState")
@@ -666,6 +668,31 @@ UnequipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden, sh
 			return
 		end
 	end
+end)
+
+-- Equip Best: fill every slot with the strongest pets. Unequip All: clear the slots.
+EquipBestRemote.OnServerEvent:Connect(function(player)
+	if not allow(player, "equipBest", 0.5) then return end
+	local data = PlayerData.Get(player)
+	if not data then return end
+	local sorted = table.clone(data.Pets)
+	table.sort(sorted, function(a, b) return a.Multiplier > b.Multiplier end)
+	local slots = GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills, data.Passes)
+	data.EquippedPetUids = {}
+	for i = 1, math.min(slots, #sorted) do
+		table.insert(data.EquippedPetUids, sorted[i].Uid)
+	end
+	pushData(player)
+	refreshFollowers(player, data)
+end)
+
+UnequipAllRemote.OnServerEvent:Connect(function(player)
+	if not allow(player, "unequipAll", 0.5) then return end
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.EquippedPetUids = {}
+	pushData(player)
+	refreshFollowers(player, data)
 end)
 
 FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)

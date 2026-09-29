@@ -59,42 +59,79 @@ function AscensionUI.Build(deps)
 	local ascendFrame, ascendScroll = deps.createPanel("AscendFrame", "Ascend")
 	table.insert(deps.panels, ascendFrame)
 
-	local progressLabel = text(ascendScroll, { Size = UDim2.new(1, 0, 0, 30), TextScaled = true, LayoutOrder = 1 })
+	-- "Ascension N" heading, progress toward the requirement, the multiplier before -> after, a big
+	-- green Ascend! button and perk cards for what you get.
+	local INK = Color3.fromRGB(22, 32, 58)
+	local function inkText(parent, props)
+		local thickness = props.StrokeThickness or 2.2
+		props.StrokeThickness = nil -- ours, not a TextLabel property
+		local l = text(parent, props)
+		local stroke = Instance.new("UIStroke", l)
+		stroke.Color = INK
+		stroke.Thickness = thickness
+		return l
+	end
+	local function outline(object, thickness)
+		local stroke = Instance.new("UIStroke", object)
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Color = INK
+		stroke.Thickness = thickness or 3
+	end
+	local heading = inkText(ascendScroll, { Size = UDim2.new(1, 0, 0, 38), TextScaled = true, LayoutOrder = 1,
+		TextColor3 = Color3.new(1, 1, 1), Text = "Ascension 1" })
+	text(ascendScroll, { Size = UDim2.new(1, 0, 0, 20), TextScaled = true, LayoutOrder = 2,
+		TextColor3 = Color3.fromRGB(90, 105, 140), Text = "Multiply your power for faster progress!" })
+
+	-- Progress bar with the Power numbers on it.
 	local barBack = Instance.new("Frame")
-	barBack.Size = UDim2.new(1, 0, 0, 16)
-	barBack.BackgroundColor3 = Color3.fromRGB(205, 225, 232)
-	barBack.LayoutOrder = 2
+	barBack.Size = UDim2.new(1, 0, 0, 28)
+	barBack.BackgroundColor3 = Color3.fromRGB(60, 70, 100)
+	barBack.LayoutOrder = 3
 	barBack.Parent = ascendScroll
 	Instance.new("UICorner", barBack).CornerRadius = UDim.new(1, 0)
+	outline(barBack, 3)
 	local barFill = Instance.new("Frame")
-	barFill.BackgroundColor3 = Color3.fromRGB(185, 96, 247)
+	barFill.BackgroundColor3 = Color3.fromRGB(80, 220, 110)
 	barFill.BorderSizePixel = 0
 	barFill.Parent = barBack
 	Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
+	local progressLabel = inkText(barBack, { Size = UDim2.fromScale(1, 1), TextScaled = true, TextColor3 = Color3.new(1, 1, 1), ZIndex = 2 })
 
-	local rewardLabel = text(ascendScroll, {
-		Size = UDim2.new(1, 0, 0, 52), TextScaled = true, LayoutOrder = 3,
-		TextColor3 = Color3.fromRGB(120, 70, 220),
-	})
-	local bonusLabel = text(ascendScroll, { Size = UDim2.new(1, 0, 0, 30), TextScaled = true, LayoutOrder = 4 })
-	local unlockLabel = text(ascendScroll, {
-		Size = UDim2.new(1, 0, 0, 26), TextScaled = true, LayoutOrder = 5, TextColor3 = Color3.fromRGB(0, 150, 190),
-	})
-	text(ascendScroll, {
-		Size = UDim2.new(1, 0, 0, 44), TextSize = 17, LayoutOrder = 8, TextColor3 = Color3.fromRGB(77, 116, 130),
-		Text = "Resets: Power, Coins, Upgrades, Auto-clickers\nKeeps: Pets, Gear, Skills, Gems, Tokens, Essence",
-	})
+	-- Multiplier pill: current -> next.
+	local pill = Instance.new("Frame")
+	pill.Size = UDim2.new(1, 0, 0, 56)
+	pill.BackgroundColor3 = Color3.fromRGB(240, 244, 255)
+	pill.LayoutOrder = 4
+	pill.Parent = ascendScroll
+	Instance.new("UICorner", pill).CornerRadius = UDim.new(0, 16)
+	outline(pill, 3)
+	local nowLabel = inkText(pill, { Position = UDim2.fromScale(0.05, 0.12), Size = UDim2.fromScale(0.38, 0.76), TextScaled = true,
+		TextColor3 = Color3.fromRGB(240, 70, 110), StrokeThickness = 2.5 })
+	inkText(pill, { Position = UDim2.fromScale(0.43, 0.1), Size = UDim2.fromScale(0.14, 0.8), TextScaled = true,
+		TextColor3 = Color3.fromRGB(255, 205, 50), Text = "➡️", StrokeThickness = 2.5 })
+	local nextLabel = inkText(pill, { Position = UDim2.fromScale(0.57, 0.12), Size = UDim2.fromScale(0.38, 0.76), TextScaled = true,
+		TextColor3 = Color3.fromRGB(70, 210, 100), StrokeThickness = 2.5 })
+
 	local ascendButton = Instance.new("TextButton")
 	ascendButton.Name = "AscendButton"
-	ascendButton.Size = UDim2.new(1, 0, 0, 64)
+	ascendButton.Size = UDim2.new(1, 0, 0, 62)
+	ascendButton.AutoButtonColor = false
 	ascendButton.Font = Enum.Font.FredokaOne
 	ascendButton.TextScaled = true
 	ascendButton.TextColor3 = Color3.new(1, 1, 1)
-	ascendButton.Text = "ASCEND"
-	ascendButton.LayoutOrder = 6 -- above the resets/keeps note so it's visible without scrolling
+	ascendButton.Text = "Ascend!"
+	ascendButton.LayoutOrder = 5
 	ascendButton.Parent = ascendScroll
-	Instance.new("UICorner", ascendButton).CornerRadius = UDim.new(0, 12)
-	deps.styleButton(ascendButton)
+	Instance.new("UICorner", ascendButton).CornerRadius = UDim.new(0, 16)
+	outline(ascendButton, 3.5)
+	local ascendText = Instance.new("UIStroke", ascendButton)
+	ascendText.Color = INK
+	ascendText.Thickness = 2.5
+	local ascendPad = Instance.new("UIPadding", ascendButton)
+	ascendPad.PaddingTop, ascendPad.PaddingBottom = UDim.new(0, 10), UDim.new(0, 10)
+	local ascendGradient = Instance.new("UIGradient", ascendButton)
+	ascendGradient.Rotation = 90
+	ascendGradient.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 200, 190))
 	local canAscend = false
 	ascendButton.MouseButton1Click:Connect(function()
 		if canAscend then
@@ -102,6 +139,36 @@ function AscensionUI.Build(deps)
 			ascendFrame.Visible = false
 		end
 	end)
+
+	-- Perk cards: Gems, a pet slot, and the next island (or what's kept).
+	local perks = Instance.new("Frame")
+	perks.Size = UDim2.new(1, 0, 0, 96)
+	perks.BackgroundTransparency = 1
+	perks.LayoutOrder = 6
+	perks.Parent = ascendScroll
+	local perkLayout = Instance.new("UIGridLayout", perks)
+	perkLayout.CellSize = UDim2.new(1 / 3, -8, 1, 0)
+	perkLayout.CellPadding = UDim2.fromOffset(12, 0)
+	perkLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	local function perk(order, icon)
+		local f = Instance.new("Frame")
+		f.LayoutOrder = order
+		f.BackgroundColor3 = Color3.fromRGB(225, 236, 255)
+		f.Parent = perks
+		Instance.new("UICorner", f).CornerRadius = UDim.new(0, 14)
+		outline(f, 3)
+		text(f, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(46, 46),
+			TextScaled = true, Text = icon })
+		return inkText(f, { Position = UDim2.new(0, 4, 1, -34), Size = UDim2.new(1, -8, 0, 28), TextScaled = true,
+			TextColor3 = Color3.new(1, 1, 1) })
+	end
+	local rewardLabel = perk(1, "💎")
+	local bonusLabel = perk(2, "🐾")
+	local unlockLabel = perk(3, "🗺️")
+	text(ascendScroll, {
+		Size = UDim2.new(1, 0, 0, 40), TextSize = 15, LayoutOrder = 8, TextColor3 = Color3.fromRGB(90, 105, 140),
+		Text = "Resets: Power, Coins, Upgrades, Auto-clickers\nKeeps: Pets, Gear, Skills, Gems, Tokens, Essence",
+	})
 
 	-- ===== Skill tree panel =====
 	local skillsFrame, skillsScroll = deps.createPanel("SkillsFrame", "Skill Tree")
@@ -195,22 +262,25 @@ function AscensionUI.Build(deps)
 		-- Ascend panel
 		local requirement = GameConfig.GetRebirthRequirement(data.RebirthCount)
 		local ready = data.Power >= requirement
-		progressLabel.Text = "⚡ " .. fmt(data.Power) .. " / " .. fmt(requirement) .. " Power"
-		barFill.Size = UDim2.fromScale(math.clamp(data.Power / requirement, 0, 1), 1)
-		rewardLabel.Text = "💎 +" .. fmt(GameConfig.GetAscensionGems(math.max(data.Power, requirement), data.RebirthCount)) .. " Gems"
-			.. (if ready then "" else " (at requirement)")
-		bonusLabel.Text = "Permanent power: x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount)
-			.. "  →  x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount + 1)
-		unlockLabel.Text = ""
+		heading.Text = "Ascension " .. (data.RebirthCount + 1)
+		progressLabel.Text = fmt(data.Power) .. " / " .. fmt(requirement) .. " Power ("
+			.. math.floor(math.clamp(data.Power / requirement, 0, 1) * 100) .. "%)"
+		barFill.Size = UDim2.fromScale(math.clamp(data.Power / requirement, 0.04, 1), 1)
+		nowLabel.Text = "x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount)
+		nextLabel.Text = "x" .. GameConfig.GetRebirthMultiplier(data.RebirthCount + 1)
+		rewardLabel.Text = "+" .. fmt(GameConfig.GetAscensionGems(math.max(data.Power, requirement), data.RebirthCount)) .. " Gems"
+		local slotsNow = GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills, data.Passes)
+		local slotsNext = GameConfig.GetMaxEquippedPets(data.RebirthCount + 1, data.Skills, data.Passes)
+		bonusLabel.Text = if slotsNext > slotsNow then "+1 Pet Equip" else "Pets kept"
+		unlockLabel.Text = "Keeps pets"
 		for _, zone in ipairs(GameConfig.Zones) do
 			if zone.RequiredRebirths == data.RebirthCount + 1 then
-				unlockLabel.Text = "Unlocks " .. zone.Name .. "!"
+				unlockLabel.Text = "Unlocks " .. zone.Name
 			end
 		end
-		ascendButton.Text = if ready then "ASCEND" else "Need " .. fmt(requirement - data.Power) .. " more Power"
+		ascendButton.Text = if ready then "Ascend!" else "Need " .. fmt(requirement - data.Power) .. " more"
 		canAscend = ready
-		ascendButton.AutoButtonColor = ready
-		ascendButton.BackgroundColor3 = if ready then Color3.fromRGB(185, 96, 247) else GREY
+		ascendButton.BackgroundColor3 = if ready then Color3.fromRGB(70, 210, 90) else GREY
 
 		-- Skill tree
 		gemsHeader.Text = "💎 " .. fmt(gems) .. " Gems  •  earn more by Ascending"

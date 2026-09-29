@@ -261,43 +261,127 @@ local eggsToggle = createTabButton("EggsToggle", "EGGS", Color3.fromRGB(0, 202, 
 local petsToggle = createTabButton("PetsToggle", "PETS", Color3.fromRGB(209, 119, 245))
 
 -- Generic panel factory used by Shop / Eggs / Pets
+-- Panel look: a thick-outlined card with a blue-to-purple header bar, a big icon breaking out of the
+-- top-left corner, a "Title!" heading and a red square close button.
+local PANEL_INK = Color3.fromRGB(22, 32, 58)
+local PANEL_ICONS = {
+ ShopFrame="⬆️", EggsFrame="🥚", PetsFrame="🐶", AscendFrame="🔄", SkillsFrame="🌟", GearFrame="⚔️",
+ QuestsFrame="📜", DailyFrame="🎁", TokenShopFrame="🚀", CodesFrame="🏷️", SettingsFrame="⚙️", OfflineFrame="🌙",
+ StoreFrame="rbxassetid://110488612009893", -- the Shop basket (tools/art/make_shop_icon.py)
+}
 local function createPanel(name, title)
 	local frame = Instance.new("Frame")
 	frame.Name = name
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.new(0.5, 35, 0.5, 10)
 	frame.Size = UDim2.new(0, 570, 0, 440)
- frame.ZIndex=3
-	styleCard(frame, Color3.fromRGB(252, 254, 255))
+	frame.ZIndex = 3
+	frame.BackgroundColor3 = Color3.new(1, 1, 1)
+	frame.BorderSizePixel = 0
 	frame.Visible = false
 	frame.Parent = screenGui
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 20)
+	local body = Instance.new("UIGradient", frame)
+	body.Rotation = 90
+	body.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(230, 236, 252))
+	local border = Instance.new("UIStroke", frame)
+	border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	border.Color = PANEL_INK
+	border.Thickness = 3.5
+
+	-- Header bar (rounded on top only: a square strip covers its lower corners).
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 58)
+	header.BackgroundColor3 = Color3.new(1, 1, 1)
+	header.BorderSizePixel = 0
+	header.Parent = frame
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 20)
+	local squareBottom = Instance.new("Frame")
+	squareBottom.Position = UDim2.new(0, 0, 1, -20)
+	squareBottom.Size = UDim2.new(1, 0, 0, 20)
+	squareBottom.BackgroundColor3 = Color3.new(1, 1, 1)
+	squareBottom.BorderSizePixel = 0
+	squareBottom.Parent = header
+	for _, part in ipairs({ header, squareBottom }) do
+		local g = Instance.new("UIGradient", part)
+		g.Color = ColorSequence.new(Color3.fromRGB(80, 175, 255), Color3.fromRGB(175, 95, 255))
+	end
+	local line = Instance.new("Frame") -- dark line under the header
+	line.Position = UDim2.new(0, 0, 1, 0)
+	line.Size = UDim2.new(1, 0, 0, 3)
+	line.BackgroundColor3 = PANEL_INK
+	line.BorderSizePixel = 0
+	line.Parent = header
+
+	local icon = PANEL_ICONS[name]
+	local titleX = 18
+	if icon then
+		local iconObject
+		if icon:match("^rbxassetid://") then
+			iconObject = Instance.new("ImageLabel")
+			iconObject.Image = icon
+			iconObject.ScaleType = Enum.ScaleType.Fit
+		else
+			iconObject = Instance.new("TextLabel")
+			iconObject.Text = icon
+			iconObject.TextScaled = true
+			iconObject.Font = Enum.Font.FredokaOne
+		end
+		iconObject.Name = "PanelIcon"
+		iconObject.BackgroundTransparency = 1
+		iconObject.Position = UDim2.fromOffset(-14, -22)
+		iconObject.Size = UDim2.fromOffset(76, 76)
+		iconObject.Rotation = -8
+		iconObject.ZIndex = 5
+		iconObject.Parent = frame
+		titleX = 70
+	end
 
 	local titleLabel = Instance.new("TextLabel")
-	titleLabel.BackgroundTransparency = 0
- titleLabel.BackgroundColor3 = Color3.fromRGB(0, 196, 237)
- titleLabel.TextStrokeColor3 = Color3.fromRGB(25,48,60)
- titleLabel.TextStrokeTransparency = 0.4
- local headingStroke=Instance.new("UIStroke",titleLabel) headingStroke.Thickness=1.5 headingStroke.Transparency=0.4 headingStroke.Color=Color3.fromRGB(29,50,60)
- local headingGradient=Instance.new("UIGradient",titleLabel) headingGradient.Rotation=90
- headingGradient.Color=ColorSequence.new(Color3.new(1,1,1),Color3.fromRGB(200,222,232))
- local titleCorner=Instance.new("UICorner",titleLabel) titleCorner.CornerRadius=UDim.new(0,12)
-	titleLabel.Size = UDim2.new(1, 0, 0, 54)
+	titleLabel.Name = "Title"
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Position = UDim2.fromOffset(titleX, 6)
+	titleLabel.Size = UDim2.new(1, -titleX - 70, 0, 46)
 	titleLabel.Font = Enum.Font.FredokaOne
 	titleLabel.TextScaled = true
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.Text = title
-	titleLabel.Parent = frame
- local close = Instance.new("TextButton")
- close.Name="Close" close.Size=UDim2.fromOffset(38,34) close.Position=UDim2.new(1,-44,0,5)
- close.BackgroundColor3=Color3.fromRGB(246,88,111) close.Text="X" close.TextColor3=Color3.new(1,1,1) close.TextScaled=true
- close.Parent=frame Instance.new("UICorner",close).CornerRadius=UDim.new(0,9) styleButton(close)
- close.Activated:Connect(function() frame.Visible=false end)
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.TextColor3 = Color3.new(1, 1, 1)
+	titleLabel.Text = if title:sub(-1) == "!" then title else title .. "!"
+	titleLabel.Parent = header
+	local titleStroke = Instance.new("UIStroke", titleLabel)
+	titleStroke.Color = PANEL_INK
+	titleStroke.Thickness = 3
+
+	local close = Instance.new("TextButton")
+	close.Name = "Close"
+	close.AnchorPoint = Vector2.new(1, 0)
+	close.Position = UDim2.new(1, -8, 0, 7)
+	close.Size = UDim2.fromOffset(46, 44)
+	close.BackgroundColor3 = Color3.fromRGB(240, 60, 75)
+	close.AutoButtonColor = false
+	close.Font = Enum.Font.FredokaOne
+	close.Text = "X"
+	close.TextScaled = true
+	close.TextColor3 = Color3.new(1, 1, 1)
+	close.ZIndex = 4
+	close.Parent = frame
+	Instance.new("UICorner", close).CornerRadius = UDim.new(0, 12)
+	local closeBorder = Instance.new("UIStroke", close)
+	closeBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	closeBorder.Color = PANEL_INK
+	closeBorder.Thickness = 3
+	local closeText = Instance.new("UIStroke", close)
+	closeText.Color = PANEL_INK
+	closeText.Thickness = 2
+	local closePad = Instance.new("UIPadding", close)
+	closePad.PaddingTop, closePad.PaddingBottom = UDim.new(0, 7), UDim.new(0, 7)
+	close.Activated:Connect(function() frame.Visible = false end)
 
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "Scroll"
-	scroll.Position = UDim2.new(0, 0, 0, 58)
-	scroll.Size = UDim2.new(1, 0, 1, -58)
+	scroll.Position = UDim2.new(0, 0, 0, 64)
+	scroll.Size = UDim2.new(1, 0, 1, -66)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 6
@@ -687,6 +771,84 @@ local function refreshEggs()
 end
 
 -- ===== Pets inventory =====
+-- A toolbar (pets owned / max, Unequip All, Equip Best) over a grid of cards, one per kind of pet
+-- (name + rarity + Golden/Shiny): rarity-colored, the pet's picture, its multiplier, a count badge,
+-- a star while any are equipped. Tapping a card equips one more of it (or unequips when all slots are
+-- full); a Fuse button appears once there are enough duplicates.
+
+local PET_INK = Color3.fromRGB(22, 32, 58)
+local EquipBestRemote = Remotes:WaitForChild("EquipBest")
+local UnequipAllRemote = Remotes:WaitForChild("UnequipAll")
+
+local function petInkText(parent, props)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.FredokaOne
+	l.TextScaled = true
+	l.TextColor3 = Color3.new(1, 1, 1)
+	for k, v in pairs(props) do l[k] = v end
+	local stroke = Instance.new("UIStroke", l)
+	stroke.Color = PET_INK
+	stroke.Thickness = 2
+	l.Parent = parent
+	return l
+end
+local function petOutline(object, thickness)
+	local stroke = Instance.new("UIStroke", object)
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Color = PET_INK
+	stroke.Thickness = thickness or 2.5
+	return stroke
+end
+local function pillButton(parent, text, color, width)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(width, 40)
+	b.AutoButtonColor = false
+	b.BackgroundColor3 = color
+	b.Font = Enum.Font.FredokaOne
+	b.TextScaled = true
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Text = text
+	b.Parent = parent
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 12)
+	petOutline(b, 3)
+	local t = Instance.new("UIStroke", b)
+	t.Color = PET_INK
+	t.Thickness = 2
+	local pad = Instance.new("UIPadding", b)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 7), UDim.new(0, 7)
+	return b
+end
+
+local petToolbar = Instance.new("Frame")
+petToolbar.Name = "Toolbar"
+petToolbar.Size = UDim2.new(1, 0, 0, 44)
+petToolbar.BackgroundTransparency = 1
+petToolbar.LayoutOrder = 0
+petToolbar.Parent = petsScroll
+local petCountLabel = petInkText(petToolbar, { Position = UDim2.fromOffset(4, 6), Size = UDim2.fromOffset(150, 32),
+	TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 214, 90), Text = "0/0" })
+local unequipAllButton = pillButton(petToolbar, "Unequip All", Color3.fromRGB(240, 70, 85), 140)
+unequipAllButton.AnchorPoint = Vector2.new(1, 0)
+unequipAllButton.Position = UDim2.new(1, -152, 0, 2)
+local equipBestButton = pillButton(petToolbar, "Equip Best", Color3.fromRGB(60, 200, 90), 140)
+equipBestButton.AnchorPoint = Vector2.new(1, 0)
+equipBestButton.Position = UDim2.new(1, -4, 0, 2)
+unequipAllButton.Activated:Connect(function() UnequipAllRemote:FireServer() end)
+equipBestButton.Activated:Connect(function() EquipBestRemote:FireServer() end)
+
+local petGrid = Instance.new("Frame")
+petGrid.Name = "PetGrid"
+petGrid.Size = UDim2.new(1, 0, 0, 0)
+petGrid.AutomaticSize = Enum.AutomaticSize.Y
+petGrid.BackgroundTransparency = 1
+petGrid.LayoutOrder = 1
+petGrid.Parent = petsScroll
+local petGridLayout = Instance.new("UIGridLayout", petGrid)
+petGridLayout.CellSize = UDim2.fromOffset(120, 132)
+petGridLayout.CellPadding = UDim2.fromOffset(10, 10)
+petGridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+petGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 local petGroupFrames = {}
 local emptyPets=Instance.new("TextLabel")
@@ -694,6 +856,7 @@ emptyPets.Name="EmptyInventory" emptyPets.Size=UDim2.new(1,0,0,100)
 emptyPets.BackgroundTransparency=1 emptyPets.TextColor3=Color3.fromRGB(44,76,89)
 emptyPets.TextWrapped=true emptyPets.TextSize=22 emptyPets.Font=Enum.Font.FredokaOne
 emptyPets.Text="Your pet adventure starts here!\nHatch your first egg for "..GameConfig.Eggs[1].Cost.." Coins."
+emptyPets.LayoutOrder=2
 emptyPets.Parent=petsScroll
 
 local function petGroupKey(name, rarity, golden, shiny)
@@ -706,108 +869,53 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 		return existing
 	end
 
-	local frame = Instance.new("Frame")
-	frame.Name = "PetGroup"
-	frame.Size = UDim2.new(1, 0, 0, 104)
-	frame.BackgroundColor3 = Color3.fromRGB(225, 246, 249)
-	frame.LayoutOrder = layoutOrder
-	frame.Parent = petsScroll
-
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+	local card = Instance.new("TextButton")
+	card.Name = "PetCard"
+	card.AutoButtonColor = false
+	card.Text = ""
+	card.LayoutOrder = layoutOrder
+	card.Parent = petGrid
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
+	petOutline(card, 3)
+	local gradient = Instance.new("UIGradient", card)
+	gradient.Rotation = 90
 
 	local iconContainer = Instance.new("Frame")
 	iconContainer.Name = "IconContainer"
-	iconContainer.Position = UDim2.new(0, 8, 0, 8)
-	iconContainer.Size = UDim2.new(0, 74, 0, 74)
-	iconContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-	iconContainer.Parent = frame
-	Instance.new("UICorner", iconContainer).CornerRadius = UDim.new(0, 8)
+	iconContainer.BackgroundTransparency = 1
+	iconContainer.AnchorPoint = Vector2.new(0.5, 0)
+	iconContainer.Position = UDim2.new(0.5, 0, 0, 6)
+	iconContainer.Size = UDim2.fromOffset(86, 86)
+	iconContainer.Parent = card
 
-	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "NameLabel"
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.new(0, 92, 0, 6)
-	nameLabel.Size = UDim2.new(1, -242, 0, 22)
-	nameLabel.Font = Enum.Font.FredokaOne
-	nameLabel.TextScaled = true
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.Parent = frame
-
-	local infoLabel = Instance.new("TextLabel")
-	infoLabel.Name = "InfoLabel"
-	infoLabel.BackgroundTransparency = 1
-	infoLabel.Position = UDim2.new(0, 92, 0, 28)
-	infoLabel.Size = UDim2.new(1, -242, 0, 18)
-	infoLabel.Font = Enum.Font.FredokaOne
-	infoLabel.TextScaled = true
-	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-	infoLabel.TextColor3 = Color3.fromRGB(58, 90, 105)
-	infoLabel.Parent = frame
-
-	local equippedLabel = Instance.new("TextLabel")
-	equippedLabel.Name = "EquippedLabel"
-	equippedLabel.BackgroundTransparency = 1
-	equippedLabel.Position = UDim2.new(0, 92, 0, 48)
-	equippedLabel.Size = UDim2.new(1, -242, 0, 16)
-	equippedLabel.Font = Enum.Font.FredokaOne
-	equippedLabel.TextScaled = true
-	equippedLabel.TextXAlignment = Enum.TextXAlignment.Left
-	equippedLabel.TextColor3 = Color3.fromRGB(77, 116, 130)
-	equippedLabel.Parent = frame
-
-	local equipButton = Instance.new("TextButton")
-	equipButton.Name = "EquipButton"
-	equipButton.AnchorPoint = Vector2.new(1, 0)
-	equipButton.Position = UDim2.new(1, -10, 0, 6)
-	equipButton.Size = UDim2.new(0, 130, 0, 40)
-	equipButton.BackgroundColor3 = Color3.fromRGB(88, 219, 132)
-	equipButton.Font = Enum.Font.FredokaOne
-	equipButton.TextScaled = true
-	equipButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	equipButton.Text = "Equip"
-	equipButton.Parent = frame
- styleButton(equipButton)
-
-	Instance.new("UICorner", equipButton).CornerRadius = UDim.new(0, 8)
-
-	local fuseButton = Instance.new("TextButton")
+	local nameLabel = petInkText(card, { Name = "NameLabel", Position = UDim2.new(0, 4, 1, -44), Size = UDim2.new(1, -8, 0, 18) })
+	local multLabel = petInkText(card, { Name = "Multiplier", Position = UDim2.new(0, 4, 1, -26), Size = UDim2.new(1, -8, 0, 22),
+		TextColor3 = Color3.fromRGB(255, 230, 110) })
+	local star = petInkText(card, { Name = "Equipped", Position = UDim2.fromOffset(4, 2), Size = UDim2.fromOffset(34, 30),
+		Text = "⭐", Visible = false, ZIndex = 3 })
+	local countBadge = petInkText(card, { Name = "Count", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 4),
+		Size = UDim2.fromOffset(44, 22), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3 })
+	local fuseButton = pillButton(card, "Fuse", Color3.fromRGB(170, 90, 255), 70)
 	fuseButton.Name = "FuseButton"
-	fuseButton.AnchorPoint = Vector2.new(1, 0)
-	fuseButton.Position = UDim2.new(1, -10, 0, 48)
-	fuseButton.Size = UDim2.new(0, 130, 0, 40)
-	fuseButton.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
-	fuseButton.Font = Enum.Font.FredokaOne
-	fuseButton.TextScaled = true
-	fuseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	fuseButton.Text = "Fuse x5"
+	fuseButton.AnchorPoint = Vector2.new(0.5, 0)
+	fuseButton.Position = UDim2.new(0.5, 0, 0, 62)
+	fuseButton.Size = UDim2.fromOffset(78, 30)
+	fuseButton.ZIndex = 4
 	fuseButton.Visible = false
-	fuseButton.Parent = frame
- styleButton(fuseButton)
 
-	Instance.new("UICorner", fuseButton).CornerRadius = UDim.new(0, 8)
-
-	local abilityLabel = Instance.new("TextLabel")
-	abilityLabel.Name = "AbilityLabel"
-	abilityLabel.BackgroundTransparency = 1
-	abilityLabel.Position = UDim2.new(0, 92, 0, 66)
-	abilityLabel.Size = UDim2.new(1, -242, 0, 32)
-	abilityLabel.Font = Enum.Font.FredokaOne
-	abilityLabel.TextSize = 13
-	abilityLabel.TextWrapped = true
-	abilityLabel.TextXAlignment = Enum.TextXAlignment.Left
-	abilityLabel.TextYAlignment = Enum.TextYAlignment.Top
-	abilityLabel.TextColor3 = Color3.fromRGB(150, 80, 220)
-	abilityLabel.Parent = frame
+	local scale = Instance.new("UIScale", card)
+	card.MouseEnter:Connect(function() TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back), { Scale = 1.05 }):Play() end)
+	card.MouseLeave:Connect(function() TweenService:Create(scale, TweenInfo.new(0.12), { Scale = 1 }):Play() end)
 
 	local group = {
-		Frame = frame,
+		Frame = card,
+		Gradient = gradient,
 		IconContainer = iconContainer,
 		IconBuilt = false,
 		NameLabel = nameLabel,
-		InfoLabel = infoLabel,
-		EquippedLabel = equippedLabel,
-		AbilityLabel = abilityLabel,
-		EquipButton = equipButton,
+		MultLabel = multLabel,
+		Star = star,
+		Count = countBadge,
 		FuseButton = fuseButton,
 		EquipConnection = nil,
 		FuseConnection = nil,
@@ -817,10 +925,12 @@ local function getOrCreatePetGroupFrame(key, layoutOrder)
 end
 
 local function refreshPets()
- emptyPets.Visible = #currentData.Pets == 0
+	emptyPets.Visible = #currentData.Pets == 0
+	local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount, currentData.Skills, currentData.Passes)
+	petCountLabel.Text = #currentData.Pets .. "/" .. GameConfig.MaxPets .. "   ⭐ " .. #currentData.EquippedPetUids .. "/" .. maxEquipped
+
 	local groups = {}
 	local order = {}
-
 	for _, pet in ipairs(currentData.Pets) do
 		local key = petGroupKey(pet.Name, pet.Rarity, pet.Golden, pet.Shiny)
 		if not groups[key] then
@@ -829,26 +939,27 @@ local function refreshPets()
 		end
 		groups[key].Count += 1
 	end
-
 	local equippedSet = {}
 	for _, uid in ipairs(currentData.EquippedPetUids) do
 		equippedSet[uid] = true
 	end
 	for _, pet in ipairs(currentData.Pets) do
 		if equippedSet[pet.Uid] then
-			local key = petGroupKey(pet.Name, pet.Rarity, pet.Golden, pet.Shiny)
-			groups[key].EquippedCount += 1
+			groups[petGroupKey(pet.Name, pet.Rarity, pet.Golden, pet.Shiny)].EquippedCount += 1
 		end
 	end
+	-- Strongest first, like "Equip Best" would pick them.
+	table.sort(order, function(a, b)
+		local pa, pb = groups[a].Pet, groups[b].Pet
+		if pa.Multiplier ~= pb.Multiplier then return pa.Multiplier > pb.Multiplier end
+		return a < b
+	end)
 
-	-- Hide any stale group frames from a previous state, then rebuild visible ones.
 	for _, existing in pairs(petGroupFrames) do
 		existing.Frame.Visible = false
 	end
 
-	local layoutOrder = 0
-	for _, key in ipairs(order) do
-		layoutOrder += 1
+	for layoutOrder, key in ipairs(order) do
 		local info = groups[key]
 		local pet = info.Pet
 		local group = getOrCreatePetGroupFrame(key, layoutOrder)
@@ -862,36 +973,24 @@ local function refreshPets()
 			group.IconBuilt = true
 		end
 
-		local displayName = (if pet.Shiny then "★ Shiny " else "") .. (if pet.Golden then "Golden " .. pet.Name else pet.Name)
-		local color = GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(255, 255, 255)
-
-		group.NameLabel.Text = displayName
-		group.NameLabel.TextColor3 = color:Lerp(Color3.fromRGB(29,49,67),0.35)
-		group.InfoLabel.Text = pet.Rarity .. " - " .. formatMultiplier(pet.Multiplier) .. " - Owned " .. info.Count
-		group.EquippedLabel.Text = "Equipped: " .. info.EquippedCount
-		local ability = GameConfig.DescribePetAbility(pet.Name, pet.Golden)
-		group.AbilityLabel.Text = if ability then "★ " .. ability else ""
-
-		local maxEquipped = GameConfig.GetMaxEquippedPets(currentData.RebirthCount, currentData.Skills, currentData.Passes)
-		if info.EquippedCount > 0 then
-			group.EquipButton.Text = "Unequip"
-			group.EquipButton.BackgroundColor3 = Color3.fromRGB(160, 60, 60)
-		else
-			group.EquipButton.Text = "Equip"
-			local canEquip = #currentData.EquippedPetUids < maxEquipped
-			group.EquipButton.BackgroundColor3 = if canEquip
-				then Color3.fromRGB(88, 219, 132)
-				else Color3.fromRGB(90, 90, 100)
-		end
+		local color = if pet.Golden then Color3.fromRGB(255, 205, 60) else (GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(200, 200, 210))
+		group.Frame.BackgroundColor3 = color
+		group.Gradient.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 215))
+		group.NameLabel.Text = (if pet.Shiny then "★ " else "") .. (if pet.Golden then "Golden " else "") .. pet.Name
+		group.MultLabel.Text = formatMultiplier(pet.Multiplier)
+		group.Star.Visible = info.EquippedCount > 0
+		group.Star.Text = if info.EquippedCount > 1 then "⭐" .. info.EquippedCount else "⭐"
+		group.Count.Text = if info.Count > 1 then "x" .. info.Count else ""
 
 		if group.EquipConnection then
 			group.EquipConnection:Disconnect()
 		end
-		group.EquipConnection = group.EquipButton.MouseButton1Click:Connect(function()
-			if info.EquippedCount > 0 then
-				UnequipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden, pet.Shiny == true)
-			else
+		group.EquipConnection = group.Frame.Activated:Connect(function()
+			-- Equip one more of this kind if there's a free slot and one left; otherwise unequip one.
+			if #currentData.EquippedPetUids < maxEquipped and info.EquippedCount < info.Count then
 				EquipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden, pet.Shiny == true)
+			elseif info.EquippedCount > 0 then
+				UnequipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden, pet.Shiny == true)
 			end
 		end)
 
@@ -901,7 +1000,7 @@ local function refreshPets()
 		end
 		if not pet.Golden and not pet.Shiny and info.Count >= GameConfig.FusionRequirement then
 			group.FuseButton.Visible = true
-			group.FuseConnection = group.FuseButton.MouseButton1Click:Connect(function()
+			group.FuseConnection = group.FuseButton.Activated:Connect(function()
 				FusePetsRemote:FireServer(pet.Name, pet.Rarity)
 			end)
 		else
@@ -1416,7 +1515,42 @@ require(script.StoreUI).Build({
  clickRemote=ClickRemote,
 })
 -- Joyful, calm background music (shuffled, cross-faded) with a 🎵 mute button.
-require(script.MusicPlayer).Start({ screenGui=screenGui, styleButton=styleButton })
+local music=require(script.MusicPlayer).Start({ screenGui=screenGui, styleButton=styleButton })
+-- Settings panel: toggle switches for music, sound effects and low graphics (reduced motion).
+local settingsFrame,settingsScroll=createPanel("SettingsFrame","Settings")
+table.insert(panels,settingsFrame) panelScales[settingsFrame]=Instance.new("UIScale",settingsFrame)
+local settingsButton=Instance.new("TextButton") settingsButton.Name="SettingsButton" settingsButton.Text="SETTINGS"
+settingsButton.Size=UDim2.fromOffset(84,84) settingsButton.BackgroundColor3=Color3.fromRGB(80,160,235) settingsButton.Parent=screenGui
+styleButton(settingsButton) Instance.new("UICorner",settingsButton).CornerRadius=UDim.new(0,16)
+bindTab(settingsButton,settingsFrame)
+local function toggleRow(order,icon,label,get,set)
+ local row=Instance.new("Frame") row.Size=UDim2.new(1,0,0,54) row.BackgroundColor3=Color3.fromRGB(236,242,255) row.LayoutOrder=order row.Parent=settingsScroll
+ Instance.new("UICorner",row).CornerRadius=UDim.new(0,14)
+ local border=Instance.new("UIStroke",row) border.ApplyStrokeMode=Enum.ApplyStrokeMode.Border border.Color=PANEL_INK border.Thickness=2.5
+ local name=Instance.new("TextLabel") name.BackgroundTransparency=1 name.Position=UDim2.fromOffset(14,8) name.Size=UDim2.new(1,-120,1,-16)
+ name.Font=Enum.Font.FredokaOne name.TextScaled=true name.TextXAlignment=Enum.TextXAlignment.Left name.TextColor3=PANEL_INK
+ name.Text=icon.."  "..label name.Parent=row
+ local switch=Instance.new("TextButton") switch.AnchorPoint=Vector2.new(1,0.5) switch.Position=UDim2.new(1,-14,0.5,0)
+ switch.Size=UDim2.fromOffset(72,34) switch.Text="" switch.AutoButtonColor=false switch.Parent=row
+ Instance.new("UICorner",switch).CornerRadius=UDim.new(1,0)
+ local sb=Instance.new("UIStroke",switch) sb.ApplyStrokeMode=Enum.ApplyStrokeMode.Border sb.Color=PANEL_INK sb.Thickness=2.5
+ local knob=Instance.new("Frame") knob.AnchorPoint=Vector2.new(0.5,0.5) knob.Size=UDim2.fromOffset(26,26) knob.BackgroundColor3=Color3.new(1,1,1) knob.Parent=switch
+ Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0)
+ local kb=Instance.new("UIStroke",knob) kb.Color=PANEL_INK kb.Thickness=2
+ local function show(animated)
+  local on=get()
+  switch.BackgroundColor3=on and Color3.fromRGB(70,210,90) or Color3.fromRGB(170,178,196)
+  local target=UDim2.new(on and 1 or 0,on and -19 or 19,0.5,0)
+  if animated then TweenService:Create(knob,TweenInfo.new(0.15,Enum.EasingStyle.Quad),{Position=target}):Play() else knob.Position=target end
+ end
+ switch.Activated:Connect(function() set(not get()) playSound("Click") show(true) end)
+ show(false)
+end
+toggleRow(1,"🎵","Music",music.IsEnabled,music.SetEnabled)
+toggleRow(2,"🔊","Sound Effects",function() return soundEnabled end,function(v)
+ soundEnabled=v soundButton.Text=soundEnabled and "SOUND ON" or "SOUND OFF" end)
+toggleRow(3,"🐢","Low Graphics",function() return reducedMotion end,function(v)
+ reducedMotion=v motionButton.Text=reducedMotion and "FX LOW" or "FX ON" end)
 -- Simulator HUD look: top counters, tile grid, Rewards + quick buttons, big click button, chips.
 require(script.HudStyle).Apply({
  screenGui=screenGui,
@@ -1427,5 +1561,6 @@ require(script.HudStyle).Apply({
  controls=controls,
  objective=objective,
  powerLabel=powerLabel,
+ panels=panels,
 })
 resizeHUD() -- size the panels created above

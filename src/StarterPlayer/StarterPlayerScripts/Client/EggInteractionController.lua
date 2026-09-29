@@ -130,7 +130,7 @@ function EggInteractionController.Start(deps)
 	rim.ZIndex = 0
 	rim.Parent = root
 	corner(rim, 22)
-	gradient(rim, Color3.fromRGB(120, 170, 255), Color3.fromRGB(150, 110, 240))
+	gradient(rim, Color3.fromRGB(80, 175, 255), Color3.fromRGB(175, 95, 255), 0) -- same as the other panels' headers
 	local rootScale = Instance.new("UIScale")
 	rootScale.Parent = root
 	local fitScale = 1
@@ -158,8 +158,11 @@ function EggInteractionController.Start(deps)
 
 	local title = label(inner, {
 		Position = UDim2.fromOffset(78, 8), Size = UDim2.new(1, -134, 0, 38), TextScaled = true,
-		TextColor3 = INK, Text = "",
+		TextColor3 = WHITE, Text = "",
 	})
+	local titleStroke = Instance.new("UIStroke", title)
+	titleStroke.Color = INK
+	titleStroke.Thickness = 3
 	local luckPill = label(inner, {
 		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 46), Size = UDim2.fromOffset(170, 22),
 		BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(80, 200, 120), TextSize = 15, Text = "",
@@ -472,7 +475,7 @@ function EggInteractionController.Start(deps)
 		local balance = data[egg.Currency] or 0
 		local zoneColor = PetConfig.Get(egg.Pets[#egg.Pets].Rarity).Color
 
-		title.Text = egg.Name
+		title.Text = egg.Name .. "!"
 		luckPill.Visible = luck > 1.001
 		luckPill.Text = string.format("LUCK x%.3g", luck)
 		priceRow.Text = currency.Icon .. " " .. deps.formatNumber(egg.Cost)

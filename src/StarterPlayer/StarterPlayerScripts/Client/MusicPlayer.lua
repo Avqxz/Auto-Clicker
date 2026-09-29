@@ -96,16 +96,24 @@ function MusicPlayer.Start(deps)
 	slash.Visible = false
 	slash.Parent = button
 
-	button.MouseButton1Click:Connect(function()
-		enabled = not enabled
+	local function setEnabled(on)
+		enabled = on
 		slash.Visible = not enabled
 		button.BackgroundColor3 = if enabled then Color3.fromRGB(90, 200, 160) else Color3.fromRGB(152, 174, 184)
 		if current then fade(current, if enabled then config.Volume else 0) end
+	end
+	button.MouseButton1Click:Connect(function()
+		setEnabled(not enabled)
 	end)
 
 	if #config.Tracks > 0 then
 		playNext()
 	end
+	-- For the Settings panel.
+	return {
+		SetEnabled = setEnabled,
+		IsEnabled = function() return enabled end,
+	}
 end
 
 return MusicPlayer
