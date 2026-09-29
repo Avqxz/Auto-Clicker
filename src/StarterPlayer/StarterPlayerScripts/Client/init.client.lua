@@ -15,6 +15,17 @@ local PetModelFactory = require(ReplicatedStorage.Modules.PetModelFactory)
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+-- Resetting is disabled: the Roblox menu's Reset Character button does nothing (falling into the void
+-- is handled by the server's void rescue instead). SetCore can fail until the core scripts load.
+task.spawn(function()
+	for _ = 1, 20 do
+		if pcall(game:GetService("StarterGui").SetCore, game:GetService("StarterGui"), "ResetButtonCallback", false) then
+			return
+		end
+		task.wait(0.5)
+	end
+end)
+
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local ClickRemote = Remotes:WaitForChild("Click")
 local PurchaseUpgradeRemote = Remotes:WaitForChild("PurchaseUpgrade")
