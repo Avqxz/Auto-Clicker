@@ -846,6 +846,8 @@ Players.PlayerRemoving:Connect(function(player)
 	gateToastCooldown[player.UserId] = nil
 end)
 
+local lastSafe = {} -- [userId] = CFrame of the last spot the player stood on (see Void rescue)
+
 -- Backstop for the gates: anyone standing on an island they haven't unlocked (jumped a gate, glitched
 -- through, exploited) is sent back to the nearest island they have unlocked.
 local zoneIndex = {}
@@ -887,12 +889,61 @@ task.spawn(function()
 			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 			local zone = data and root and lockedIslandUnder(root.Position, data.RebirthCount)
 			if zone then
+				local spot = CFrame.new(safeSpotBefore(zone, data.RebirthCount))
 				root.AssemblyLinearVelocity = Vector3.zero
-				player.Character:PivotTo(CFrame.new(safeSpotBefore(zone, data.RebirthCount)))
+				player.Character:PivotTo(spot)
+				lastSafe[player.UserId] = spot -- so the void rescue doesn't pull them back up
 				ZoneLockedRemote:FireClient(player, zone.Name, zone.RequiredRebirths)
 			end
 		end
 	end
+end)
+
+-- ===== Void rescue =====
+-- Falling off an island doesn't kill you: the server remembers where each player last stood on solid
+-- ground and, once they drop well below it, puts them back there (well before Roblox's kill height).
+
+local VOID_DROP = 20 -- studs below the last safe spot, with nothing underneath, that count as fallen
+local voidRay = RaycastParams.new()
+voidRay.FilterType = Enum.RaycastFilterType.Include
+voidRay.FilterDescendantsInstances = { workspace:WaitForChild("Map") }
+
+-- True if there's no ground anywhere below `position` (a drop off a ledge onto lower ground isn't a fall).
+local function overVoid(position)
+	return workspace:Raycast(position, Vector3.new(0, -1000, 0), voidRay) == nil
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		for _, player in ipairs(Players:GetPlayers()) do
+			local character = player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local data = PlayerData.Get(player)
+			if root and humanoid and humanoid.Health > 0 and data then
+				local safe = lastSafe[player.UserId]
+				if safe and root.Position.Y < safe.Position.Y - VOID_DROP and overVoid(root.Position) then
+					root.AssemblyLinearVelocity = Vector3.zero
+					root.AssemblyAngularVelocity = Vector3.zero
+					character:PivotTo(safe + Vector3.new(0, 3, 0))
+				elseif humanoid.FloorMaterial ~= Enum.Material.Air
+					and not lockedIslandUnder(root.Position, data.RebirthCount) then
+					lastSafe[player.UserId] = CFrame.new(root.Position) * root.CFrame.Rotation
+				end
+			end
+		end
+	end
+end)
+local function watchRespawns(player)
+	player.CharacterAdded:Connect(function()
+		lastSafe[player.UserId] = nil -- a fresh spawn starts a fresh safe spot
+	end)
+end
+Players.PlayerAdded:Connect(watchRespawns)
+for _, player in ipairs(Players:GetPlayers()) do watchRespawns(player) end
+Players.PlayerRemoving:Connect(function(player)
+	lastSafe[player.UserId] = nil
 end)
 
 -- ===== Passive income (auto-clickers) =====
