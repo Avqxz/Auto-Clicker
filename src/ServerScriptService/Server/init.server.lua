@@ -846,6 +846,55 @@ Players.PlayerRemoving:Connect(function(player)
 	gateToastCooldown[player.UserId] = nil
 end)
 
+-- Backstop for the gates: anyone standing on an island they haven't unlocked (jumped a gate, glitched
+-- through, exploited) is sent back to the nearest island they have unlocked.
+local zoneIndex = {}
+for i, zone in ipairs(GameConfig.Zones) do
+	zoneIndex[zone.Id] = i
+end
+local function lockedIslandUnder(position, rebirths)
+	for zoneId, island in pairs(mapRefs.Islands or {}) do
+		local zone = GameConfig.Zones[zoneIndex[zoneId]]
+		local flat = Vector3.new(position.X - island.center.X, 0, position.Z - island.center.Z)
+		if zone and rebirths < zone.RequiredRebirths and flat.Magnitude <= island.radius
+			and position.Y > island.center.Y - 15 and position.Y < island.center.Y + 60 then
+			return zone
+		end
+	end
+	return nil
+end
+-- On the bridge just outside the gate into `zone` when the island before it is unlocked; otherwise the
+-- lobby spawn.
+local function safeSpotBefore(zone, rebirths)
+	local index = zoneIndex[zone.Id]
+	local previous = GameConfig.Zones[index - 1]
+	local from, to = previous and mapRefs.Islands[previous.Id], mapRefs.Islands[zone.Id]
+	if from and to and rebirths >= previous.RequiredRebirths then
+		for _, gate in ipairs(mapRefs.Gates) do
+			if gate:GetAttribute("Zone") == zone.Id then
+				local back = Vector3.new(from.center.X - to.center.X, 0, from.center.Z - to.center.Z).Unit
+				return gate.Position + back * 7 + Vector3.new(0, 1, 0) -- the barrier's center is ~4 studs above the deck
+			end
+		end
+	end
+	return Vector3.new(0, 5, 19) -- lobby spawn
+end
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		for _, player in ipairs(Players:GetPlayers()) do
+			local data = PlayerData.Get(player)
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			local zone = data and root and lockedIslandUnder(root.Position, data.RebirthCount)
+			if zone then
+				root.AssemblyLinearVelocity = Vector3.zero
+				player.Character:PivotTo(CFrame.new(safeSpotBefore(zone, data.RebirthCount)))
+				ZoneLockedRemote:FireClient(player, zone.Name, zone.RequiredRebirths)
+			end
+		end
+	end
+end)
+
 -- ===== Passive income (auto-clickers) =====
 
 local accumulator = 0

@@ -18,7 +18,9 @@ function ZoneGates.Start()
 			if required then
 				local unlocked = rebirths.Value >= required
 				gate.CanCollide = not unlocked
-				gate.Transparency = if unlocked then 0.85 else 0.3
+				if not gate:GetAttribute("Invisible") then -- the tall walls behind the gates stay unseen
+					gate.Transparency = if unlocked then 0.85 else 0.3
+				end
 			end
 		end
 	end

@@ -29,6 +29,8 @@ local ISLANDS={
 -- Where two pieces sit in the design; used to line the imported model up.
 local ANCHOR_NAME,ANCHOR_POS='Barrier_Grasslands',V(0,5.3,-49.5)
 local CHECK_NAME,CHECK_POS='EggBody_Celestial',V(-23,53.2,-285)
+-- Invisible walls behind each Ascension gate: taller than any jump, wider than the bridge.
+local GATE_WALL={Width=26,Height=100,Thickness=2,Below=12} -- Below: studs under the bridge deck
 local ZONE_COLORS={Lobby=C(92,233,236),Grasslands=C(120,220,90),Desert=C(255,190,80),Ice=C(120,200,255),
  Enchanted=C(200,120,255),Volcano=C(255,110,40),Candy=C(255,120,200),Celestial=C(255,225,120)}
 
@@ -167,6 +169,19 @@ function MapBuilder.Build()
    label(sign,string.upper(zone.Name)..'\n'..zone.RequiredRebirths..' ASCENSION'..(zone.RequiredRebirths==1 and '' or 'S'),
     {Offset=V(0,0,0),Color=ZONE_COLORS[zone.Id],SubColor=C(255,214,90),Size=3.2,MaxDistance=220})
    table.insert(gates,barrier)
+   -- The art barrier is a thin 8-stud panel you can jump over or slip past at the bridge edges, so
+   -- each gate also gets a tall invisible wall across the bridge (perpendicular to the line between
+   -- the two islands). It opens and closes with the gate on each client (Client/ZoneGates.lua).
+   local from,to=ISLANDS[Config.Zones[i-1].Id],ISLANDS[zone.Id]
+   if from and to then
+    local across=V(to.center.X-from.center.X,0,to.center.Z-from.center.Z)
+    local wall=part(gatesFolder,zone.Id..'GateWall',V(GATE_WALL.Width,GATE_WALL.Height,GATE_WALL.Thickness),barrier.Position,C(255,255,255))
+    wall.CFrame=CFrame.lookAt(barrier.Position,barrier.Position+across)+V(0,GATE_WALL.Height/2-barrier.Size.Y/2-GATE_WALL.Below,0)
+    wall.Transparency=1 wall.CanQuery=false wall.CastShadow=false
+    wall:SetAttribute('Zone',zone.Id) wall:SetAttribute('ZoneName',zone.Name)
+    wall:SetAttribute('RequiredRebirths',zone.RequiredRebirths) wall:SetAttribute('Invisible',true)
+    table.insert(gates,wall)
+   end
   else
    warn('[MapBuilder] Missing Barrier_'..zone.Id..' in the imported world; that zone has no gate.')
   end
@@ -275,6 +290,7 @@ function MapBuilder.Build()
 
  -- Global leaderboards go on the art's two panels at the lobby's south edge (facing the spawn).
  local boardSpots={CFrame.new(-6,6,29.4),CFrame.new(6,6,29.4)}
- return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses,Stations=stations,BoardSpots=boardSpots}
+ return {ClickOrb=orb,RebirthAltar=altar,EggParts=eggs,Gates=gates,Bosses=bosses,Stations=stations,BoardSpots=boardSpots,
+  Islands=ISLANDS}
 end
 return MapBuilder
