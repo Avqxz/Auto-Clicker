@@ -7,7 +7,7 @@ local PlayerData = {Cache={}, Sessions={}, Saving={}}
 local Store = DSS:GetDataStore('ClickingSimulator_PlayerData_v1')
 local OWNER = game.JobId ~= '' and game.JobId or HttpService:GenerateGUID(false)
 local LEASE = 180
-local DEFAULT = {SaveVersion=2,Power=0,Coins=0,Tokens=0,Essence=0,Boosts={},ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalPowerEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={},Gear={Items={},Equipped={},NextUid=1},Quests={Day=-1,Daily={},Week=-1,Weekly={}},Daily={LastClaimDay=-1,Streak=0},Passes={},Receipts={}}
+local DEFAULT = {SaveVersion=2,Power=0,Coins=0,Tokens=0,Essence=0,Boosts={},ClickPower=Config.StartingClickPower,UpgradeLevels={},AutoClickerLevels={},RebirthCount=0,TotalPowerEarned=0,Pets={},EquippedPetUids={},NextPetUid=1,RedeemedCodes={},EggsHatched=0,HasPickedStarterPet=false,Gems=0,Skills={},Gear={Items={},Equipped={},NextUid=1},Quests={Day=-1,Daily={},Week=-1,Weekly={}},Daily={LastClaimDay=-1,Streak=0},Passes={},Receipts={},Discovered={},Settings={AutoDelete={}}}
 local function copy(t)
  local out={} for k,v in pairs(t) do out[k]=type(v)=='table' and copy(v) or v end return out
 end
@@ -32,6 +32,13 @@ function PlayerData.Load(player)
  -- Studio uses disposable data deliberately, protecting production profiles.
  if RunService:IsStudio() then
   PlayerData.Cache[player.UserId]=copy(DEFAULT)
+  -- Testing aid: a JSON object in ServerStorage's StudioTestData attribute is merged into the fresh
+  -- Studio save (e.g. {"Coins":1e6,"RebirthCount":3}). Studio only.
+  local test=game:GetService('ServerStorage'):GetAttribute('StudioTestData')
+  if type(test)=='string' and test~='' then
+   local ok,values=pcall(HttpService.JSONDecode,HttpService,test)
+   if ok and type(values)=='table' then for k,v in pairs(values) do PlayerData.Cache[player.UserId][k]=v end end
+  end
   player:SetAttribute('SaveStatus','Studio preview — progress is not saved')
   return PlayerData.Cache[player.UserId]
  end

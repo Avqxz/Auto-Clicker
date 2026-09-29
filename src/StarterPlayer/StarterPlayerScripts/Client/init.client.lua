@@ -8,6 +8,8 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local EggConfig = require(ReplicatedStorage.Modules.EggConfig)
+local PetConfig = require(ReplicatedStorage.Modules.PetConfig)
 local PetModelFactory = require(ReplicatedStorage.Modules.PetModelFactory)
 
 local player = Players.LocalPlayer
@@ -20,12 +22,9 @@ local PurchaseAutoClickerRemote = Remotes:WaitForChild("PurchaseAutoClicker")
 local AscendRemote = Remotes:WaitForChild("Ascend")
 local UnlockSkillRemote = Remotes:WaitForChild("UnlockSkill")
 local DataUpdatedRemote = Remotes:WaitForChild("DataUpdated")
-local HatchEggRemote = Remotes:WaitForChild("HatchEgg")
 local EquipPetRemote = Remotes:WaitForChild("EquipPet")
 local UnequipPetRemote = Remotes:WaitForChild("UnequipPet")
 local FusePetsRemote = Remotes:WaitForChild("FusePets")
-local EggResultRemote = Remotes:WaitForChild("EggResult")
-local EggLockedRemote = Remotes:WaitForChild("EggLocked")
 local ZoneLockedRemote = Remotes:WaitForChild("ZoneLocked")
 local PickStarterPetRemote = Remotes:WaitForChild("PickStarterPet")
 local comboWindow = GameConfig.Combo.BaseWindow -- cached on each data update (upgrades + gear + pet abilities)
@@ -570,8 +569,11 @@ function refreshShop()
 end
 
 -- ===== Eggs =====
+-- The Eggs menu lists every egg; its buttons hatch through the egg controller (started further down),
+-- which plays the hatch animation. Eggs other than the Starter Egg ask you to walk to them.
 
 local eggEntries = {}
+local eggController -- EggInteractionController, set once it starts
 
 local function createEggEntry(egg, layoutOrder)
 	local frame = Instance.new("Frame")
@@ -594,12 +596,6 @@ local function createEggEntry(egg, layoutOrder)
 	nameLabel.Text = egg.Name
 	nameLabel.Parent = frame
 
-	local oddsText = {}
-	for _, pet in ipairs(egg.Pets) do
-		local star = if GameConfig.PetAbilities[pet.Name] then " ★" else "" -- ★ = has an ability
-		table.insert(oddsText, pet.Name .. " (" .. pet.Rarity .. star .. ")")
-	end
-
 	local oddsLabel = Instance.new("TextLabel")
 	oddsLabel.BackgroundTransparency = 1
 	oddsLabel.Position = UDim2.new(0, 10, 0, 28)
@@ -611,7 +607,6 @@ local function createEggEntry(egg, layoutOrder)
 	oddsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	oddsLabel.TextYAlignment = Enum.TextYAlignment.Top
 	oddsLabel.TextColor3 = Color3.fromRGB(58, 90, 105)
-	oddsLabel.Text = table.concat(oddsText, ", ")
 	oddsLabel.Parent = frame
 
 	local hatchButton = Instance.new("TextButton")
@@ -630,7 +625,7 @@ local function createEggEntry(egg, layoutOrder)
 	Instance.new("UICorner", hatchButton).CornerRadius = UDim.new(0, 8)
 
 	hatchButton.MouseButton1Click:Connect(function()
-		HatchEggRemote:FireServer(egg.Id)
+		if eggController then eggController.Request(egg.Id, 1) end
 	end)
 
 	-- Triple Hatch pass owners get an x3 button.
@@ -649,10 +644,10 @@ local function createEggEntry(egg, layoutOrder)
 	styleButton(tripleButton)
 	Instance.new("UICorner", tripleButton).CornerRadius = UDim.new(0, 8)
 	tripleButton.MouseButton1Click:Connect(function()
-		HatchEggRemote:FireServer(egg.Id, 3)
+		if eggController then eggController.Request(egg.Id, 3) end
 	end)
 
-	eggEntries[egg.Id] = { Egg = egg, Frame = frame, HatchButton = hatchButton, TripleButton = tripleButton }
+	eggEntries[egg.Id] = { Egg = egg, Frame = frame, HatchButton = hatchButton, TripleButton = tripleButton, OddsLabel = oddsLabel }
 end
 
 do
@@ -667,13 +662,24 @@ local function refreshEggs()
 	for _, entry in pairs(eggEntries) do
 		local egg = entry.Egg
 		local locked = currentData.RebirthCount < egg.RequiredRebirths
-		entry.TripleButton.Visible = not locked and GameConfig.HasPass(currentData, "TripleHatch")
+		-- Pet list; rare pets you haven't hatched yet stay "???".
+		local oddsText = {}
+		for _, pet in ipairs(egg.Pets) do
+			local star = if GameConfig.PetAbilities[pet.Name] then " ★" else "" -- ★ = has an ability
+			local hidden = PetConfig.Get(pet.Rarity).Hidden and not (currentData.Discovered or {})[pet.Name]
+			table.insert(oddsText, (if hidden then "???" else pet.Name) .. " (" .. pet.Rarity .. star .. ")")
+		end
+		entry.OddsLabel.Text = table.concat(oddsText, ", ")
+		local triple = EggConfig.TripleHatchUnlock
+		entry.TripleButton.Visible = not locked and ((triple.Pass and GameConfig.HasPass(currentData, triple.Pass))
+			or (triple.Rebirths and currentData.RebirthCount >= triple.Rebirths)) == true
 		if locked then
 			entry.HatchButton.Text = "Locked"
 			entry.HatchButton.BackgroundColor3 = Color3.fromRGB(140, 159, 171)
 		else
-			entry.HatchButton.Text = "💰 " .. formatNumber(egg.Cost)
-			entry.HatchButton.BackgroundColor3 = if currentData.Coins >= egg.Cost
+			local currency = EggConfig.Currencies[egg.Currency] or EggConfig.Currencies.Coins
+			entry.HatchButton.Text = currency.Icon .. " " .. formatNumber(egg.Cost)
+			entry.HatchButton.BackgroundColor3 = if (currentData[egg.Currency] or 0) >= egg.Cost
 				then Color3.fromRGB(0, 202, 237)
 				else Color3.fromRGB(152, 174, 184)
 		end
@@ -690,8 +696,8 @@ emptyPets.TextWrapped=true emptyPets.TextSize=22 emptyPets.Font=Enum.Font.Fredok
 emptyPets.Text="Your pet adventure starts here!\nHatch your first egg for "..GameConfig.Eggs[1].Cost.." Coins."
 emptyPets.Parent=petsScroll
 
-local function petGroupKey(name, rarity, golden)
-	return name .. "|" .. rarity .. "|" .. tostring(golden)
+local function petGroupKey(name, rarity, golden, shiny)
+	return name .. "|" .. rarity .. "|" .. tostring(golden) .. "|" .. tostring(shiny == true)
 end
 
 local function getOrCreatePetGroupFrame(key, layoutOrder)
@@ -816,7 +822,7 @@ local function refreshPets()
 	local order = {}
 
 	for _, pet in ipairs(currentData.Pets) do
-		local key = petGroupKey(pet.Name, pet.Rarity, pet.Golden)
+		local key = petGroupKey(pet.Name, pet.Rarity, pet.Golden, pet.Shiny)
 		if not groups[key] then
 			groups[key] = { Pet = pet, Count = 0, EquippedCount = 0 }
 			table.insert(order, key)
@@ -830,7 +836,7 @@ local function refreshPets()
 	end
 	for _, pet in ipairs(currentData.Pets) do
 		if equippedSet[pet.Uid] then
-			local key = petGroupKey(pet.Name, pet.Rarity, pet.Golden)
+			local key = petGroupKey(pet.Name, pet.Rarity, pet.Golden, pet.Shiny)
 			groups[key].EquippedCount += 1
 		end
 	end
@@ -856,7 +862,7 @@ local function refreshPets()
 			group.IconBuilt = true
 		end
 
-		local displayName = if pet.Golden then "Golden " .. pet.Name else pet.Name
+		local displayName = (if pet.Shiny then "★ Shiny " else "") .. (if pet.Golden then "Golden " .. pet.Name else pet.Name)
 		local color = GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(255, 255, 255)
 
 		group.NameLabel.Text = displayName
@@ -883,9 +889,9 @@ local function refreshPets()
 		end
 		group.EquipConnection = group.EquipButton.MouseButton1Click:Connect(function()
 			if info.EquippedCount > 0 then
-				UnequipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden)
+				UnequipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden, pet.Shiny == true)
 			else
-				EquipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden)
+				EquipPetRemote:FireServer(pet.Name, pet.Rarity, pet.Golden, pet.Shiny == true)
 			end
 		end)
 
@@ -893,7 +899,7 @@ local function refreshPets()
 			group.FuseConnection:Disconnect()
 			group.FuseConnection = nil
 		end
-		if not pet.Golden and info.Count >= GameConfig.FusionRequirement then
+		if not pet.Golden and not pet.Shiny and info.Count >= GameConfig.FusionRequirement then
 			group.FuseButton.Visible = true
 			group.FuseConnection = group.FuseButton.MouseButton1Click:Connect(function()
 				FusePetsRemote:FireServer(pet.Name, pet.Rarity)
@@ -902,112 +908,6 @@ local function refreshPets()
 			group.FuseButton.Visible = false
 		end
 	end
-end
-
--- ===== Egg hatch reveal popup =====
-
-local revealFrame = Instance.new("Frame")
-revealFrame.Name = "RevealFrame"
-revealFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-revealFrame.Position = UDim2.new(0.5, 0, 0.3, 0)
-revealFrame.Size = UDim2.new(0, 0, 0, 0)
-revealFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-revealFrame.BackgroundTransparency = 1
-revealFrame.ClipsDescendants = true
-revealFrame.ZIndex = 8
-revealFrame.Parent = screenGui
-
-Instance.new("UICorner", revealFrame).CornerRadius = UDim.new(0, 14)
-
-local revealStroke = Instance.new("UIStroke")
-revealStroke.Thickness = 3
-revealStroke.Transparency = 1
-revealStroke.Parent = revealFrame
-
-local revealViewport = Instance.new("ViewportFrame")
-revealViewport.Name = "RevealViewport"
-revealViewport.BackgroundTransparency = 1
-revealViewport.Position = UDim2.new(0.5, 0, 0, 10)
-revealViewport.AnchorPoint = Vector2.new(0.5, 0)
-revealViewport.Size = UDim2.new(0, 120, 0, 120)
-revealViewport.Ambient = Color3.fromRGB(150, 150, 150)
-revealViewport.LightColor = Color3.fromRGB(255, 255, 255)
-revealViewport.Parent = revealFrame
-
-local revealWorldModel = Instance.new("WorldModel")
-revealWorldModel.Parent = revealViewport
-
-local revealCamera = Instance.new("Camera")
-revealCamera.CFrame = CFrame.new(Vector3.new(0, 1.2, 5.2), Vector3.new(0, 0.7, 0)) -- fits the cube pets as they spin
-revealCamera.Parent = revealViewport
-revealViewport.CurrentCamera = revealCamera
-
-local revealLabel = Instance.new("TextLabel")
-revealLabel.AnchorPoint = Vector2.new(0.5, 0)
-revealLabel.Position = UDim2.new(0.5, 0, 0, 134)
-revealLabel.Size = UDim2.new(1, -20, 0, 56)
-revealLabel.BackgroundTransparency = 1
-revealLabel.Font = Enum.Font.FredokaOne
-revealLabel.TextScaled = true
-revealLabel.TextTransparency = 1
-revealLabel.Text = ""
-revealLabel.Parent = revealFrame
-
-local revealToken = 0
-local revealRotationConnection = nil
-
-local function showPetReveal(pet)
-	revealToken += 1
-	local myToken = revealToken
-
-	local color = GameConfig.RarityColors[pet.Rarity] or Color3.fromRGB(255, 255, 255)
-	local displayName = if pet.Golden then "Golden " .. pet.Name else pet.Name
-
-	revealWorldModel:ClearAllChildren()
-	local model = PetModelFactory.Create(pet, { WithEffects = false })
-	model.Parent = revealWorldModel
-	local modelPivot = model:GetPivot()
-
-	if revealRotationConnection then
-		revealRotationConnection:Disconnect()
-		revealRotationConnection = nil
-	end
-	revealRotationConnection = RunService.RenderStepped:Connect(function(dt)
-		modelPivot = modelPivot * CFrame.Angles(0, dt * 2, 0)
-		model:PivotTo(modelPivot)
-	end)
-
-	revealFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-	revealStroke.Color = color
-	revealLabel.TextColor3 = color
-	local ability = GameConfig.PetAbilities[pet.Name]
-	revealLabel.Text = string.format("%s\n%s  %s", displayName, pet.Rarity, formatMultiplier(pet.Multiplier))
-		.. (if ability then "  ★ " .. ability.Name else "")
-
-	TweenService:Create(
-		revealFrame,
-		TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Size = UDim2.new(0, 260, 0, 200), BackgroundTransparency = 0.1 }
-	):Play()
-	TweenService:Create(revealStroke, TweenInfo.new(0.2), { Transparency = 0 }):Play()
-	TweenService:Create(revealLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
-
-	task.delay(2.5, function()
-		if myToken ~= revealToken then
-			return
-		end
-		if revealRotationConnection then
-			revealRotationConnection:Disconnect()
-			revealRotationConnection = nil
-		end
-		TweenService:Create(
-			revealFrame,
-			TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }
-		):Play()
-		TweenService:Create(revealStroke, TweenInfo.new(0.25), { Transparency = 1 }):Play()
-		TweenService:Create(revealLabel, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
-	end)
 end
 
 -- ===== Starter pet selection (first-join onboarding) =====
@@ -1206,10 +1106,6 @@ DataUpdatedRemote.OnClientEvent:Connect(function(data)
 	refreshUI()
 end)
 
-EggResultRemote.OnClientEvent:Connect(function(pet)
-	showPetReveal(pet)
-end)
-
 -- Simple fading banner for brief status messages (e.g. a locked zone gate).
 local toastFrame = Instance.new("Frame")
 toastFrame.Name = "ToastFrame"
@@ -1251,14 +1147,6 @@ local function showToast(text)
 		TweenService:Create(toastLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
 	end)
 end
-
-EggLockedRemote.OnClientEvent:Connect(function(eggName, requiredRebirths)
-	showToast(("Locked! Need %d Ascension%s to hatch the %s"):format(
-		requiredRebirths,
-		requiredRebirths == 1 and "" or "s",
-		eggName
-	))
-end)
 
 ZoneLockedRemote.OnClientEvent:Connect(function(zoneName, requiredRebirths)
 	showToast(("Locked! Need %d Ascension%s to enter %s"):format(
@@ -1325,10 +1213,17 @@ local SoundService=game:GetService("SoundService")
 local Debris=game:GetService("Debris")
 local soundEnabled=true
 local reducedMotion=false
+-- kind: a GameConfig.Sounds key, or an EggConfig.Sounds key (those carry their own volume and pitch).
 local function playSound(kind)
  if not soundEnabled then return end
- local sound=Instance.new("Sound") sound.SoundId=GameConfig.Sounds[kind] or GameConfig.Sounds.Click
- sound.Volume=kind=="Click" and 0.15 or 0.35 sound.Parent=SoundService
+ local eggSound=EggConfig.Sounds[kind]
+ local sound=Instance.new("Sound")
+ if eggSound then
+  sound.SoundId=eggSound.Id sound.Volume=eggSound.Volume or 0.35 sound.PlaybackSpeed=eggSound.Pitch or 1
+ else
+  sound.SoundId=GameConfig.Sounds[kind] or GameConfig.Sounds.Click sound.Volume=kind=="Click" and 0.15 or 0.35
+ end
+ sound.Parent=SoundService
  sound:Play() Debris:AddItem(sound,8)
 end
 local lastSound=0
@@ -1417,9 +1312,17 @@ local function celebrate(rarity)
   Debris:AddItem(confetti,1.3)
  end
 end
-EggResultRemote.OnClientEvent:Connect(function(pet)
- if pet.Rarity=="Epic" or pet.Rarity=="Legendary" or pet.Rarity=="Mythic" then celebrate(pet.Rarity) else playSound("Purchase") end
-end)
+-- Eggs: floating pedestal eggs, the proximity egg UI and the hatch animation.
+require(script.EggPedestals).Start()
+eggController=require(script.EggInteractionController).Start({
+ getData=function() return currentData end,
+ dataChanged=DataUpdatedRemote,
+ remotes=Remotes,
+ playSound=playSound,
+ shake=function(strength,seconds) polish.Shake(strength,seconds) end,
+ isReducedMotion=function() return reducedMotion end,
+ formatNumber=formatNumber,
+})
 Remotes.Feedback.OnClientEvent:Connect(function(kind,message)
  showToast(message)
  if kind=="Ascend" then celebrate("Epic") elseif kind=="Purchase" then playSound("Purchase") end

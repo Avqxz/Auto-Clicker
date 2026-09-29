@@ -12,6 +12,7 @@ local Quests = require(script.Quests)
 local Monetization = require(script.Monetization)
 local MapBuilder = require(script.MapBuilder)
 local PetFollowers = require(script.PetFollowers)
+local EggHatchingService = require(script.EggHatchingService)
 
 -- ===== Map =====
 
@@ -38,12 +39,9 @@ local AscendRemote = createRemoteEvent("Ascend")
 local UnlockSkillRemote = createRemoteEvent("UnlockSkill")
 local OpenPanelRemote = createRemoteEvent("OpenPanel")
 local DataUpdatedRemote = createRemoteEvent("DataUpdated")
-local HatchEggRemote = createRemoteEvent("HatchEgg")
 local EquipPetRemote = createRemoteEvent("EquipPet")
 local UnequipPetRemote = createRemoteEvent("UnequipPet")
 local FusePetsRemote = createRemoteEvent("FusePets")
-local EggResultRemote = createRemoteEvent("EggResult")
-local EggLockedRemote = createRemoteEvent("EggLocked")
 local ZoneLockedRemote = createRemoteEvent("ZoneLocked")
 local ClickResultRemote = createRemoteEvent("ClickResult")
 local BossStateRemote = createRemoteEvent("BossState")
@@ -150,6 +148,18 @@ local function refreshFollowers(player, data)
 	PetFollowers.Refresh(player, getEquippedPets(data))
 end
 
+-- Hatching: EggHatchingService validates and rolls every hatch on the server (see EggConfig).
+local hatching = EggHatchingService.Start({
+	PlayerData = PlayerData,
+	pushData = pushData,
+	updateLeaderstats = updateLeaderstats,
+	refreshFollowers = refreshFollowers,
+	getEquippedPets = getEquippedPets,
+	Quests = Quests,
+	announce = function(message, rarity) AnnouncementRemote:FireAllClients(message, rarity) end,
+	remotes = remotesFolder,
+})
+
 -- ===== Player lifecycle =====
 
 local monetization = Monetization.Start({
@@ -163,6 +173,7 @@ Players.PlayerAdded:Connect(function(player)
 	local data = PlayerData.Load(player)
  if not data then return end
  if not player.Parent then PlayerData.Release(player) return end
+	hatching.PrepareData(data)
 	setupLeaderstats(player, data)
 
 	Quests.Refresh(data)
@@ -196,6 +207,7 @@ Players.PlayerRemoving:Connect(function(player)
 	bossFights[player.UserId] = nil
 	bossCooldowns[player.UserId] = nil
  limits[player.UserId]=nil
+	hatching.PlayerRemoving(player)
 end)
 
 -- ===== Boss fights =====
@@ -563,91 +575,6 @@ end)
 
 -- ===== Pets & eggs =====
 
--- skipCooldown: the 2nd/3rd egg of a Triple Hatch.
-local function handleHatchEgg(player, eggId, skipCooldown)
-	local cooldown = GameConfig.HatchCooldown * (if player:GetAttribute("Pass_FastHatch") then 0.5 else 1)
-	if type(eggId)~="string" or (not skipCooldown and not allow(player,"hatch",cooldown)) then return end
-	local data = PlayerData.Get(player)
-	local egg = findById(GameConfig.Eggs, eggId)
-	if not data or not egg then
-		return
-	end
-
-	if data.RebirthCount < egg.RequiredRebirths then
-		EggLockedRemote:FireClient(player, egg.Name, egg.RequiredRebirths)
-		return
-	end
-
-	-- Eggs outside the starting zone must be hatched in person, behind that zone's rebirth gate.
-	if egg.Zone ~= GameConfig.Zones[1].Id then
-		local eggPart = mapRefs.EggParts[egg.Id]
-		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		if not eggPart or not root or (root.Position - eggPart.Position).Magnitude > GameConfig.EggHatchRange then
-			local zone = findById(GameConfig.Zones, egg.Zone)
-			FeedbackRemote:FireClient(player, "Info", "Go to " .. (zone and zone.Name or egg.Zone) .. " to hatch the " .. egg.Name .. "!")
-			return
-		end
-	end
-
-	if data.Coins < egg.Cost then
-		return
-	end
-
-	if #data.Pets>=GameConfig.MaxPets then FeedbackRemote:FireClient(player,"Info","Pet storage full. Fuse duplicates to make room.") return end
- data.Coins -= egg.Cost
- data.EggsHatched=(data.EggsHatched or 0)+1
-	Quests.Track(data, "Hatch", 1)
-
-	local rolled = GameConfig.RollPet(egg, data.Skills,
-		GameConfig.GetBoostMultiplier(data, "Luck") * (1 + GameConfig.GetPetAbilityStats(getEquippedPets(data)).EggLuck)
-			* (if GameConfig.HasPass(data, "Lucky") then 1.5 else 1))
-	local uid = data.NextPetUid
-	data.NextPetUid += 1
-
-	local newPet = {
-		Uid = uid,
-		Name = rolled.Name,
-		Rarity = rolled.Rarity,
-		Multiplier = rolled.Multiplier,
-		Golden = false,
-	}
-	table.insert(data.Pets, newPet)
-	if newPet.Rarity == "Legendary" or newPet.Rarity == "Mythic" then
-		Quests.Track(data, "HatchLegendary", 1)
-	end
-
-	local equipChanged = false
-	if #data.EquippedPetUids < GameConfig.GetMaxEquippedPets(data.RebirthCount, data.Skills, data.Passes) then
-		table.insert(data.EquippedPetUids, uid)
-		equipChanged = true
-	end
-
-	updateLeaderstats(player)
-	pushData(player)
-	EggResultRemote:FireClient(player, newPet)
- if newPet.Rarity=="Mythic" or newPet.Rarity=="Legendary" then
-  AnnouncementRemote:FireAllClients(player.Name.." hatched "..newPet.Rarity.." "..newPet.Name.."!",newPet.Rarity)
- end
-	if equipChanged then
-		refreshFollowers(player, data)
-	end
-end
-
-HatchEggRemote.OnServerEvent:Connect(function(player, eggId, count)
-	-- Triple Hatch pass: three eggs per press (each still checks cost, storage and range).
-	if count == 3 and player:GetAttribute("Pass_TripleHatch") then
-		local data = PlayerData.Get(player)
-		local before = data and #data.Pets
-		handleHatchEgg(player, eggId)
-		if data and #data.Pets > before then
-			handleHatchEgg(player, eggId, true)
-			handleHatchEgg(player, eggId, true)
-		end
-		return
-	end
-	handleHatchEgg(player, eggId)
-end)
-
 PickStarterPetRemote.OnServerEvent:Connect(function(player, petName)
 	local data = PlayerData.Get(player)
 	if not data or data.HasPickedStarterPet then
@@ -674,16 +601,20 @@ PickStarterPetRemote.OnServerEvent:Connect(function(player, petName)
 		Rarity = chosen.Rarity,
 		Multiplier = chosen.Multiplier,
 		Golden = false,
+		Shiny = false,
+		Level = 1,
+		Locked = false,
 	}
 	table.insert(data.Pets, newPet)
 	table.insert(data.EquippedPetUids, uid)
 	data.HasPickedStarterPet = true
+	hatching.Discover(data, newPet.Name)
 
 	pushData(player)
 	refreshFollowers(player, data)
 end)
 
-EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
+EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden, shiny)
 	local data = PlayerData.Get(player)
 	if not data then
 		return
@@ -699,7 +630,7 @@ EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 	end
 
 	for _, pet in ipairs(data.Pets) do
-		if pet.Name == name and pet.Rarity == rarity and pet.Golden == golden and not equippedSet[pet.Uid] then
+		if pet.Name == name and pet.Rarity == rarity and pet.Golden == golden and (pet.Shiny == true) == (shiny == true) and not equippedSet[pet.Uid] then
 			table.insert(data.EquippedPetUids, pet.Uid)
 			pushData(player)
 			refreshFollowers(player, data)
@@ -708,7 +639,7 @@ EquipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 	end
 end)
 
-UnequipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
+UnequipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden, shiny)
 	local data = PlayerData.Get(player)
 	if not data then
 		return
@@ -721,7 +652,7 @@ UnequipPetRemote.OnServerEvent:Connect(function(player, name, rarity, golden)
 
 	for i, uid in ipairs(data.EquippedPetUids) do
 		local pet = petsByUid[uid]
-		if pet and pet.Name == name and pet.Rarity == rarity and pet.Golden == golden then
+		if pet and pet.Name == name and pet.Rarity == rarity and pet.Golden == golden and (pet.Shiny == true) == (shiny == true) then
 			table.remove(data.EquippedPetUids, i)
 			pushData(player)
 			refreshFollowers(player, data)
@@ -738,7 +669,7 @@ FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
 
 	local matches = {}
 	for _, pet in ipairs(data.Pets) do
-		if pet.Name == name and pet.Rarity == rarity and not pet.Golden then
+		if pet.Name == name and pet.Rarity == rarity and not pet.Golden and not pet.Shiny and not pet.Locked then
 			table.insert(matches, pet)
 		end
 	end
@@ -778,6 +709,9 @@ FusePetsRemote.OnServerEvent:Connect(function(player, name, rarity)
 		Rarity = rarity,
 		Multiplier = fusedMultiplier * (2 + 0.25 * GameConfig.GetSkillLevel(data.Skills, "GoldenTouch")),
 		Golden = true,
+		Shiny = false,
+		Level = 1,
+		Locked = false,
 	}
 	table.insert(data.Pets, goldenPet)
 
@@ -874,10 +808,10 @@ addClickDetector(mapRefs.RebirthAltar).MouseClick:Connect(function(player)
 	OpenPanelRemote:FireClient(player, "Ascend") -- confirm in the Ascend panel rather than ascending on one click
 end)
 
-for eggId, eggPart in pairs(mapRefs.EggParts) do
-	addClickDetector(eggPart).MouseClick:Connect(function(player)
-		handleHatchEgg(player, eggId)
-	end)
+-- Clicking an egg hatches it; the client handles the click (Client/EggInteractionController.lua) so the
+-- hatch goes through RequestHatch and plays its animation.
+for _, eggPart in pairs(mapRefs.EggParts) do
+	addClickDetector(eggPart)
 end
 
 -- ===== Zone gates =====

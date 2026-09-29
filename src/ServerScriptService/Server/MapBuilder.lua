@@ -6,7 +6,9 @@
 --   EggBody_<Zone>  -> that zone's egg (EggBody_Lobby is the Starter Egg)
 -- plus the lobby stations (Upgrades / Pet Index / Daily Rewards houses, fountain, trading plaza),
 -- spawn, click orb and one boss per biome.
+local CollectionService=game:GetService('CollectionService')
 local Config=require(game.ReplicatedStorage.Modules.GameConfig)
+local EggConfig=require(game.ReplicatedStorage.Modules.EggConfig)
 local PetModelFactory=require(game.ReplicatedStorage.Modules.PetModelFactory)
 local ArtLook=require(game.ReplicatedStorage.Modules.ArtLook)
 local MapBuilder={}
@@ -43,6 +45,24 @@ end
 local function short(n)
  for _,u in ipairs({{1e9,'B'},{1e6,'M'},{1e3,'K'}}) do if n>=u[1] then return (string.format('%.1f',n/u[1]):gsub('%.0$',''))..u[2] end end
  return tostring(n)
+end
+-- Price billboard over an egg pedestal: name, price with currency icon, and the Ascensions it needs.
+local function eggBillboard(p,egg,color,height)
+ local gui=Instance.new('BillboardGui') gui.Name='EggBillboard' gui.Size=UDim2.fromOffset(190,84)
+ gui.StudsOffset=V(0,height,0) gui.MaxDistance=110 gui.LightInfluence=0 gui.Parent=p
+ local card=Instance.new('Frame') card.Size=UDim2.fromScale(1,1) card.BackgroundColor3=C(24,32,52) card.BackgroundTransparency=0.15 card.Parent=gui
+ Instance.new('UICorner',card).CornerRadius=UDim.new(0,14)
+ local stroke=Instance.new('UIStroke') stroke.Color=color stroke.Thickness=2.5 stroke.Parent=card
+ local grad=Instance.new('UIGradient') grad.Rotation=90
+ grad.Color=ColorSequence.new(C(255,255,255),C(190,200,220)) grad.Parent=card
+ local function text(y,h,str,size,col)
+  local t=Instance.new('TextLabel') t.BackgroundTransparency=1 t.Position=UDim2.new(0,6,0,y) t.Size=UDim2.new(1,-12,0,h)
+  t.Font=Enum.Font.FredokaOne t.TextSize=size t.TextColor3=col t.Text=str t.TextStrokeTransparency=0.6 t.Parent=card
+ end
+ local currency=EggConfig.Currencies[egg.Currency] or EggConfig.Currencies.Coins
+ text(4,30,egg.Name,24,color:Lerp(C(255,255,255),0.45))
+ text(34,24,currency.Icon..' '..short(egg.Cost),21,C(255,226,110))
+ text(58,20,egg.RequiredRebirths>0 and 'Needs '..egg.RequiredRebirths..' Ascension'..(egg.RequiredRebirths==1 and '' or 's') or 'Walk up to hatch!',14,C(200,214,235))
 end
 local function invisible(p) p.Transparency=1 p.CanCollide=false p.CanQuery=false return p end
 local function prompt(parent,action,object,distance)
@@ -166,23 +186,40 @@ function MapBuilder.Build()
   if s.sign then label(hit,s.sign,90).StudsOffset=V(0,6,0) end
  end
 
- -- Eggs: an invisible clickable box around each art egg, with a label and sparkles.
+ -- Egg pedestals: an invisible box around each egg, tagged EggPedestal with its EggId, carrying the
+ -- price billboard and aura. The egg itself floats, bobs and turns on the clients
+ -- (Client/EggPedestals.lua, which animates parts with a FloatingEgg attribute).
  local eggs={}
  for _,egg in ipairs(Config.Eggs) do
   local island=ISLANDS[egg.Zone]
-  local body=world:FindFirstChild('EggBody_'..egg.Zone,true)
+  local body=world:FindFirstChild(egg.Model or ('EggBody_'..egg.Zone),true)
   local cf,size
   if body and body:IsA('BasePart') then cf,size=body.CFrame,body.Size
   elseif island then cf,size=CFrame.new(island.center+V(-13,5.2,5)),V(4.2,5,4.2)
   else warn('[MapBuilder] No island for egg '..egg.Id) end
   if cf then
-   local p=invisible(part(interactive,egg.Id,size+V(1.5,1.5,1.5),cf.Position,ZONE_COLORS[egg.Zone] or C(255,255,255)))
-   p:SetAttribute('Zone',egg.Zone)
-   label(p,egg.Name..'\n'..short(egg.Cost)..' Coins'..(egg.RequiredRebirths>0 and ' • '..egg.RequiredRebirths..' Ascensions' or '')).StudsOffset=V(0,size.Y/2+3,0)
+   local color=ZONE_COLORS[egg.Zone] or C(255,255,255)
+   local p=invisible(part(interactive,egg.Id,size+V(1.5,2.5,1.5),cf.Position+V(0,0.6,0),color))
+   p.CanQuery=true -- clickable
+   p:SetAttribute('EggId',egg.Id) p:SetAttribute('Zone',egg.Zone)
+   CollectionService:AddTag(p,'EggPedestal')
+   if body and body:IsA('BasePart') then
+    body.CanCollide=false body:SetAttribute('FloatingEgg',egg.Id)
+   end
+   eggBillboard(p,egg,color,size.Y/2+3.2)
    local sparkle=Instance.new('ParticleEmitter') sparkle.Texture='rbxasset://textures/particles/sparkles_main.dds'
-   sparkle.Color=ColorSequence.new(ZONE_COLORS[egg.Zone] or C(255,255,255)) sparkle.Size=NumberSequence.new(0.35,0)
+   sparkle.Color=ColorSequence.new(color) sparkle.Size=NumberSequence.new(0.35,0)
    sparkle.Lifetime=NumberRange.new(0.6,1.2) sparkle.Rate=6 sparkle.Speed=NumberRange.new(0.5,1.5)
    sparkle.SpreadAngle=Vector2.new(180,180) sparkle.LightEmission=0.8 sparkle.Parent=p
+   if egg.Aura then
+    local light=Instance.new('PointLight') light.Color=color light.Range=12 light.Brightness=1.4 light.Parent=p
+    local aura=Instance.new('ParticleEmitter') aura.Name='Aura' aura.Texture='rbxasset://textures/particles/sparkles_main.dds'
+    aura.Color=ColorSequence.new(color,C(255,255,255)) aura.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(0.3,0.6),NumberSequenceKeypoint.new(1,0)})
+    aura.Transparency=NumberSequence.new(0.3,1) aura.Lifetime=NumberRange.new(1.2,2) aura.Rate=10
+    aura.Speed=NumberRange.new(0.6,1.2) aura.SpreadAngle=Vector2.new(20,20) aura.EmissionDirection=Enum.NormalId.Top
+    aura.Shape=Enum.ParticleEmitterShape.Cylinder aura.ShapeStyle=Enum.ParticleEmitterShapeStyle.Surface
+    aura.LightEmission=1 aura.Parent=p
+   end
    eggs[egg.Id]=p
   end
  end

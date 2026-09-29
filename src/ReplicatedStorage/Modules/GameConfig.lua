@@ -5,6 +5,9 @@
 -- duplicate pets into stronger Golden versions, and rebirth for a permanent
 -- multiplier plus more pet-equip slots.
 
+local EggConfig = require(script.Parent.EggConfig)
+local PetConfig = require(script.Parent.PetConfig)
+
 local GameConfig = {}
 
 GameConfig.StartingClickPower = 1
@@ -427,6 +430,7 @@ end
 GameConfig.GamePasses = {
 	{ Key = "AutoClick", Id = 0, Name = "Auto Click", Description = "Adds an AUTO toggle that clicks for you" },
 	{ Key = "TripleHatch", Id = 0, Name = "Triple Hatch", Description = "Hatch 3 eggs at once" },
+	{ Key = "AutoHatch", Id = 0, Name = "Auto Hatch", Description = "Hatch eggs automatically (free after your first Ascension)" },
 	{ Key = "PetSlots", Id = 0, Name = "+3 Pet Equip", Description = "Equip 3 more pets" },
 	{ Key = "Lucky", Id = 0, Name = "Lucky", Description = "x1.5 odds for non-Common pets, forever" },
 	{ Key = "FastHatch", Id = 0, Name = "Fast Hatch", Description = "Hatch twice as fast" },
@@ -585,139 +589,15 @@ end
 GameConfig.BaseMaxEquippedPets = 3
 GameConfig.FusionRequirement = 5 -- duplicate (non-Golden) pets needed to fuse into a Golden pet
 
-GameConfig.RarityOrder = { "Common", "Rare", "Epic", "Legendary", "Mythic" }
+GameConfig.RarityOrder = {}
+GameConfig.RarityColors = {}
+for _, tier in ipairs(PetConfig.Rarities) do
+	table.insert(GameConfig.RarityOrder, tier.Id)
+	GameConfig.RarityColors[tier.Id] = tier.Color
+end
 
-GameConfig.RarityColors = {
-	Common = Color3.fromRGB(190, 190, 200),
-	Rare = Color3.fromRGB(80, 170, 255),
-	Epic = Color3.fromRGB(180, 80, 255),
-	Legendary = Color3.fromRGB(255, 190, 40),
-	Mythic = Color3.fromRGB(255, 80, 100),
-}
-
-GameConfig.Eggs = {
-	{
-		Id = "StarterEgg",
-		Name = "Starter Egg",
-		Cost = 60,
-		RequiredRebirths = 0,
-		Zone = "Lobby",
-		Pets = {
-			{ Name = "Puppy", Rarity = "Common", Weight = 40, Multiplier = 1.1 },
-			{ Name = "Bunny", Rarity = "Common", Weight = 35, Multiplier = 1.1 },
-			{ Name = "Fox", Rarity = "Common", Weight = 25, Multiplier = 1.1 },
-		},
-	},
-	{
-		Id = "GrasslandsEgg",
-		Name = "Grasslands Egg",
-		Cost = 15000,
-		RequiredRebirths = 1,
-		Zone = "Grasslands",
-		Pets = {
-			{ Name = "Bee", Rarity = "Rare", Weight = 45, Multiplier = 2 },
-			{ Name = "Leaf Dragon", Rarity = "Epic", Weight = 35, Multiplier = 3.5 },
-			{ Name = "Crowned Stag", Rarity = "Legendary", Weight = 17, Multiplier = 8 },
-			{ Name = "World Tree Guardian", Rarity = "Mythic", Weight = 3, Multiplier = 25 },
-		},
-	},
-	{
-		Id = "DesertEgg",
-		Name = "Desert Egg",
-		Cost = 80000,
-		RequiredRebirths = 2,
-		Zone = "Desert",
-		Pets = {
-			{ Name = "Camel", Rarity = "Common", Weight = 30, Multiplier = 2.5 },
-			{ Name = "Cobra", Rarity = "Common", Weight = 28, Multiplier = 2.75 },
-			{ Name = "Scorpion", Rarity = "Rare", Weight = 18, Multiplier = 3.75 },
-			{ Name = "Fennec", Rarity = "Rare", Weight = 14, Multiplier = 4.5 },
-			{ Name = "Scarab", Rarity = "Epic", Weight = 7, Multiplier = 7.5 },
-			{ Name = "Sphinx", Rarity = "Legendary", Weight = 2.5, Multiplier = 17.5 },
-			{ Name = "Sandclock Colossus", Rarity = "Mythic", Weight = 0.5, Multiplier = 45 },
-		},
-	},
-	{
-		Id = "IceEgg",
-		Name = "Ice Egg",
-		Cost = 300000,
-		RequiredRebirths = 3,
-		Zone = "Ice",
-		Pets = {
-			{ Name = "Penguin", Rarity = "Common", Weight = 30, Multiplier = 4 },
-			{ Name = "Polar Cub", Rarity = "Common", Weight = 28, Multiplier = 4.4 },
-			{ Name = "Snow Bunny", Rarity = "Rare", Weight = 18, Multiplier = 6 },
-			{ Name = "Ice Wolf", Rarity = "Rare", Weight = 14, Multiplier = 7.2 },
-			{ Name = "Frost Dragon", Rarity = "Epic", Weight = 7, Multiplier = 12 },
-			{ Name = "Aurora Owl", Rarity = "Legendary", Weight = 2.5, Multiplier = 28 },
-			{ Name = "Frozen TV", Rarity = "Mythic", Weight = 0.5, Multiplier = 72 },
-		},
-	},
-	{
-		Id = "EnchantedEgg",
-		Name = "Enchanted Egg",
-		Cost = 1200000,
-		RequiredRebirths = 4,
-		Zone = "Enchanted",
-		Pets = {
-			{ Name = "Fairy Cat", Rarity = "Common", Weight = 30, Multiplier = 6.5 },
-			{ Name = "Mushroom", Rarity = "Common", Weight = 28, Multiplier = 7.15 },
-			{ Name = "Crystal Bunny", Rarity = "Rare", Weight = 18, Multiplier = 9.75 },
-			{ Name = "Spirit Fox", Rarity = "Rare", Weight = 14, Multiplier = 11.7 },
-			{ Name = "Mystic Dragon", Rarity = "Epic", Weight = 7, Multiplier = 19.5 },
-			{ Name = "Crystal Deer", Rarity = "Legendary", Weight = 2.5, Multiplier = 45.5 },
-			{ Name = "Moon Mask", Rarity = "Mythic", Weight = 0.5, Multiplier = 117 },
-		},
-	},
-	{
-		Id = "VolcanoEgg",
-		Name = "Volcano Egg",
-		Cost = 5000000,
-		RequiredRebirths = 5,
-		Zone = "Volcano",
-		Pets = {
-			{ Name = "Lava Pup", Rarity = "Common", Weight = 30, Multiplier = 10 },
-			{ Name = "Fire Bat", Rarity = "Common", Weight = 28, Multiplier = 11 },
-			{ Name = "Ember Lizard", Rarity = "Rare", Weight = 18, Multiplier = 15 },
-			{ Name = "Demon", Rarity = "Rare", Weight = 14, Multiplier = 18 },
-			{ Name = "Magma Golem", Rarity = "Epic", Weight = 7, Multiplier = 30 },
-			{ Name = "Phoenix", Rarity = "Legendary", Weight = 2.5, Multiplier = 70 },
-			{ Name = "Infernal Chest", Rarity = "Mythic", Weight = 0.5, Multiplier = 180 },
-		},
-	},
-	{
-		Id = "CandyEgg",
-		Name = "Candy Egg",
-		Cost = 20000000,
-		RequiredRebirths = 6,
-		Zone = "Candy",
-		Pets = {
-			{ Name = "Cupcake", Rarity = "Common", Weight = 30, Multiplier = 16 },
-			{ Name = "Marshmallow", Rarity = "Common", Weight = 28, Multiplier = 17.6 },
-			{ Name = "Gummy Bear", Rarity = "Rare", Weight = 18, Multiplier = 24 },
-			{ Name = "Donut", Rarity = "Rare", Weight = 14, Multiplier = 28.8 },
-			{ Name = "Candy Dog", Rarity = "Epic", Weight = 7, Multiplier = 48 },
-			{ Name = "Cake Dragon", Rarity = "Legendary", Weight = 2.5, Multiplier = 112 },
-			{ Name = "Chocolate Chicken", Rarity = "Mythic", Weight = 0.5, Multiplier = 288 },
-		},
-	},
-	{
-		Id = "CelestialEgg",
-		Name = "Celestial Egg",
-		Cost = 150000000,
-		RequiredRebirths = 8,
-		Zone = "Celestial",
-		Pets = {
-			{ Name = "Star Pup", Rarity = "Common", Weight = 30, Multiplier = 26 },
-			{ Name = "Cosmic Cat", Rarity = "Common", Weight = 28, Multiplier = 28.6 },
-			{ Name = "Star Sprite", Rarity = "Rare", Weight = 18, Multiplier = 39 },
-			{ Name = "Angel", Rarity = "Rare", Weight = 14, Multiplier = 46.8 },
-			{ Name = "Void Ray", Rarity = "Epic", Weight = 7, Multiplier = 78 },
-			{ Name = "Celestial Dragon", Rarity = "Legendary", Weight = 2.5, Multiplier = 182 },
-			{ Name = "Orbit Guardian", Rarity = "Mythic", Weight = 0.5, Multiplier = 468 },
-		},
-	},
-}
+-- Eggs, hatch odds and hatch settings live in EggConfig; rarity tiers in PetConfig.
+GameConfig.Eggs = EggConfig.Eggs
 
 -- Pet name -> its model in ReplicatedStorage.ArtPets (from the art package), its biome, and its rendered
 -- icon (uploaded image, shown on pet cards). PetModelFactory falls back to a cube pet in the biome's
@@ -924,30 +804,6 @@ function GameConfig.GetMaxEquippedPets(rebirthCount, skills, passes)
 		+ (if passes and passes.PetSlots then 3 else 0)
 end
 
--- Weighted random pet roll from an egg's pet pool. Egg Luck (and the 2x Luck boost) scale up every
--- non-Common weight.
-function GameConfig.RollPet(egg, skills, luckMultiplier)
-	local luck = (1 + 0.1 * GameConfig.GetSkillLevel(skills, "EggLuck")) * (luckMultiplier or 1)
-	local function weight(pet)
-		return if pet.Rarity == "Common" then pet.Weight else pet.Weight * luck
-	end
-	local totalWeight = 0
-	for _, pet in ipairs(egg.Pets) do
-		totalWeight += weight(pet)
-	end
-
-	local roll = math.random() * totalWeight
-	local cumulative = 0
-	for _, pet in ipairs(egg.Pets) do
-		cumulative += weight(pet)
-		if roll <= cumulative then
-			return pet
-		end
-	end
-
-	return egg.Pets[#egg.Pets]
-end
-
 -- Power per click before combo/crit: base x pets x Ascension x Click Mastery x gear x 2x Power boost.
 function GameConfig.GetClickPower(data, equippedPets)
 	return data.ClickPower * GameConfig.GetPetMultiplierTotal(equippedPets)
@@ -987,7 +843,7 @@ GameConfig.MaxPets = 200
 GameConfig.MaxEquippedPets = 8
 GameConfig.MaxCurrency = 1e100
 GameConfig.MaxUpgradeLevel = 250
-GameConfig.HatchCooldown = 0.8
+GameConfig.HatchCooldown = EggConfig.HatchCooldown
 GameConfig.AutosaveSeconds = 60
 GameConfig.LeaderboardRefreshSeconds = 120
 GameConfig.Sounds = {Click="rbxassetid://88442833509532", Purchase="rbxassetid://139719503904449", Rare="rbxassetid://1839881844"}

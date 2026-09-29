@@ -11,7 +11,7 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 
 - **Five currencies** — ⚡ **Power** (from clicking and auto-clickers; buys upgrades, needed to Ascend), 💰 **Coins** (from bosses, quests, daily rewards and **selling Power** with the SELL button; buys eggs), 💎 **Gems** (Ascension, bosses, quests; buys skills), 🎫 **Tokens** (quests, day-7 streak; buys 15-minute 2x Power / 2x Luck boosts in the Token Shop) and ✨ **Essence** (bosses, salvaging gear; upgrades gear to +5). Saves from before the split are converted once on join: old Coins become Power.
 - **Click to earn** — click anywhere (or the CLICK button) to earn Power based on your total click power.
-- **Pets & eggs** — spend Coins to hatch eggs; each egg has a weighted pool of pets with different rarities (Common → Mythic) and multipliers. Equip pets to multiply your click power and passive income.
+- **Pets & eggs** — walk up to an egg pedestal (eggs float and turn above their stands) and an egg panel opens: the egg, its price, the pets it can hatch with their odds (after your luck), and **Hatch 1 [E] / Hatch 3 [R] / Auto [T]**; touch screens get bigger buttons instead of key hints. Hatches are decided on the server, then play a reveal: the egg flies to the center, shakes, cracks in a flash and the pet pops out, with light rays for Rare+, and a colored flash, camera shake and fanfare for Mythic/Secret (click/tap/Space speeds it up). Seven rarity tiers (Common, Unique, Rare, Epic, Legendary, Mythic, Secret); Legendary+ pets stay "???" silhouettes in the odds until you hatch one. A 1-in-250 **Shiny** roll (x1.5 power) on every hatch. **Luck** from the Egg Luck skill, pet abilities, the Lucky pass, 2x Luck boosts and a server event multiplier scales rarer tiers more (`luck ^ power` per tier, renormalized). **Auto Hatch** (free from 1 Ascension, or a pass) keeps hatching until you turn it off, walk away, run out of Coins or fill your inventory. **Auto Delete** settings for Common–Epic (Shiny and newly discovered pets are always kept). Legendary+ and Shiny hatches are announced to the server. Equip pets to multiply your click power and passive income.
 - **Pet fusion** — collect 5 duplicates of the same (non-Golden) pet and fuse them into a Golden version worth 2x the multiplier.
 - **Pet abilities** — every Epic, Legendary and Mythic pet (★ in the egg list) has an ability while equipped: bursts (e.g. Ancient Dragon's *Overcharge*: every 30 clicks, next click x10), random procs (Volcano Titan: 3% chance of x20), *Void Surge* (5% chance to fill the combo to OVERDRIVE), or passives (crit, auto income, egg luck, combo window/bonus, +Coins). Golden pets get 1.5x the passive part. Abilities stack with each other and with gear.
 - **Combo & crits** — consecutive clicks inside the combo window build a combo (x1.25 at 25, x1.5 at 50, x2 at 100, **OVERDRIVE** x3 at 200, with a glowing screen edge and sparks); every click can crit. Results are computed on the server and shown as floating "+N ⚡" numbers beside the character. Holding the CLICK button auto-clicks at 5/sec.
@@ -32,7 +32,7 @@ multiplier plus more pet-equip slots. Progress is saved per-player with
 - **Lobby + seven biome islands** — the Blender art package's world (see [ASSETS.md](ASSETS.md)): a lobby (spawn, click orb, Ascend altar on the trading plaza, Upgrades / Pet Index / Daily Rewards buildings, Boosts fountain, leaderboards, Starter Egg) and Grasslands, Desert, Ice Peaks, Enchanted Forest, Volcano, Candy Land and Celestial Heaven, joined by bridges. Each bridge's gate needs 1 / 2 / 3 / 4 / 5 / 6 / 8 Ascensions and is opened per player on the client. Every island has its own egg (hatched in person) and a boss. The in-world orb/eggs/altar are also clickable via `ClickDetector`s wired to the same server logic as the HUD buttons.
 - **Pets** — 49 pets from the art package, seven per biome (Common, Rare, Epic, Legendary, Secret/Mythic), plus older pets kept for existing saves. Imported pet models (`ReplicatedStorage.ArtPets`) and their rendered icons are used where present; otherwise `PetModelFactory.lua` builds a cartoon cube pet in the biome's colors. Legendary/Mythic accents glow, Mythic and Golden pets sparkle, Golden pets turn gold.
 
-- **Store (gamepasses & developer products)** — Auto Click (AUTO toggle), Triple Hatch (x3 button), +3 Pet Equip, Lucky (x1.5 egg luck), Fast Hatch (half cooldown) and VIP (+10% Power and Coins, [VIP] chat tag, +5 Gems per daily reward, sparkle aura); plus 2x Power / 2x Luck (15 min), Instant Boss Retry and a 25-Token pack. All convenience; nothing is required to progress. **IDs start at 0 (hidden from players)** — see "Setting up monetization" below.
+- **Store (gamepasses & developer products)** — Auto Click (AUTO toggle), Triple Hatch (Hatch 3), Auto Hatch, +3 Pet Equip, Lucky (x1.5 egg luck), Fast Hatch (half cooldown) and VIP (+10% Power and Coins, [VIP] chat tag, +5 Gems per daily reward, sparkle aura); plus 2x Power / 2x Luck (15 min), Instant Boss Retry and a 25-Token pack. All convenience; nothing is required to progress. **IDs start at 0 (hidden from players)** — see "Setting up monetization" below.
 
 Not implemented (possible extensions): the art package's pet variants
 (Rainbow, Shiny, Void, Crystal), an Aura/dice gacha system, trading (the
@@ -64,17 +64,25 @@ Roblox games in a text editor / git repo and sync them into Roblox Studio.
 ```
 default.project.json                                  # Rojo project definition
 src/
-  ReplicatedStorage/Modules/GameConfig.lua             # Shared config: upgrades, auto-clickers, eggs/pets, rebirth math
+  ReplicatedStorage/Modules/GameConfig.lua             # Shared config: upgrades, auto-clickers, pets, rebirth math
+  ReplicatedStorage/Modules/EggConfig.lua              # Eggs, pet odds, hatch options, keys, luck, Shiny and hatch sounds
+  ReplicatedStorage/Modules/PetConfig.lua              # Rarity tiers (colors, luck scaling, announcements, auto-delete)
+  ReplicatedStorage/Modules/HatchMath.lua              # Shared odds math: normalizing, luck, rolls, chance labels
   ReplicatedStorage/Modules/PetModelFactory.lua        # Builds pet models: imported art pets, or cartoon cube pets (server + client)
   ReplicatedStorage/Modules/ArtLook.lua                # Colors imported art models from ArtMaterials.lua (generated)
   ServerScriptService/Server/init.server.lua           # Server bootstrap: remotes, click/purchase/hatch/equip/fuse/rebirth handling, autosave
   ServerScriptService/Server/PlayerData.lua             # DataStore load/save/cache module
   ServerScriptService/Server/MapBuilder.lua             # Places the imported art world and wires gates, eggs, stations, bosses and lighting
   ServerScriptService/Server/PetFollowers.lua           # Spawns/animates the equipped pets that orbit each player
+  ServerScriptService/Server/EggHatchingService.lua     # RequestHatch: validation, anti-spam, payment, inventory, auto-delete, announcements
+  ServerScriptService/Server/PetRollService.lua         # Server-only pet and Shiny rolls
   ServerScriptService/Server/Quests.lua                 # Daily/weekly quest progress and the daily login reward
   ServerScriptService/Server/Monetization.lua           # Gamepass ownership, VIP aura, developer product receipts
   StarterPlayer/StarterPlayerScripts/Client/init.client.lua  # Builds the HUD/Shop/Eggs/Pets UI and talks to the server
   StarterPlayer/StarterPlayerScripts/Client/ZoneGates.lua    # Opens the zone gates the local player has unlocked
+  StarterPlayer/StarterPlayerScripts/Client/EggInteractionController.lua  # Egg panel (proximity), hatch buttons/keys, Auto Hatch, Auto Delete
+  StarterPlayer/StarterPlayerScripts/Client/HatchAnimationController.lua  # Hatch reveal animation (1 or 3 eggs)
+  StarterPlayer/StarterPlayerScripts/Client/EggPedestals.lua # Floating, turning pedestal eggs
   StarterPlayer/StarterPlayerScripts/Client/ClickFeel.lua    # Floating click numbers, combo meter and OVERDRIVE effects
   StarterPlayer/StarterPlayerScripts/Client/AscensionUI.lua  # Ascend panel, Gem-bought skill tree panel and HUD gem counter
   StarterPlayer/StarterPlayerScripts/Client/BossUI.lua       # Boss fight HUD (HP bar, timer) and results
@@ -116,7 +124,8 @@ requirements/multipliers — lives in
 client so the UI always reflects the same numbers the server enforces.
 
 - Add more upgrades/auto-clickers by appending entries to the `Upgrades` or `AutoClickers` tables; the Shop UI generates itself from that list.
-- Add more eggs/pets by appending to the `Eggs` table (each pet needs `Name`, `Rarity`, `Weight`, `Multiplier`); the Eggs and Pets UIs generate themselves from that list.
+- Add eggs in `EggConfig.lua` (each pet needs `Name`, `Rarity`, `Multiplier`, and a `Weight` or percentage `Chance`; they're normalized), then give a pedestal the egg's id: MapBuilder does this for the art package's egg stands, or tag any part `EggPedestal` with an `EggId` attribute. The egg panel, Eggs menu and odds build themselves. Rarity tiers (colors, luck scaling, announcements, auto-delete) are in `PetConfig.lua`; hatch options, keys, luck, Shiny odds and sounds in `EggConfig.lua`.
+- Testing in Studio: set a JSON string attribute `StudioTestData` on ServerStorage (e.g. `{"Coins":1000000,"RebirthCount":3}`) and it's merged into the throwaway Studio save.
 - Tune `BaseMaxEquippedPets` and `FusionRequirement` to change how many pets a player can equip at once and how many duplicates are needed to fuse a Golden pet.
 
 ## Credits

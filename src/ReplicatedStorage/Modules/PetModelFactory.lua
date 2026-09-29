@@ -7,6 +7,9 @@
 
 local GameConfig = require(script.Parent.GameConfig)
 local ArtLook = require(script.Parent.ArtLook)
+
+-- Tiers whose pets sparkle (as do Golden and Shiny pets).
+local SPARKLY = { Mythic = true, Secret = true }
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PetModelFactory = {}
@@ -136,7 +139,7 @@ local function buildArtPet(template, petData, withEffects)
 	model:PivotTo(model:GetPivot() * CFrame.Angles(0, ART_YAW, 0))
 	model.PrimaryPart = biggest
 	model.WorldPivot = CFrame.new(model:GetBoundingBox().Position) -- upright pivot at the center
-	if withEffects and biggest and (petData.Golden or petData.Rarity == "Mythic") then
+	if withEffects and biggest and (petData.Golden or petData.Shiny or SPARKLY[petData.Rarity]) then
 		local sparkles = Instance.new("ParticleEmitter")
 		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 		sparkles.Color = ColorSequence.new(if petData.Golden then GOLD else GameConfig.RarityColors.Mythic)
@@ -171,7 +174,7 @@ function PetModelFactory.Create(petData, options)
 	if petData.Golden then
 		main, accent = GOLD, GOLD_LIGHT
 	end
-	local glowAccent = petData.Golden or petData.Rarity == "Legendary" or petData.Rarity == "Mythic"
+	local glowAccent = petData.Golden or petData.Rarity == "Legendary" or SPARKLY[petData.Rarity] == true
 
 	local model = Instance.new("Model")
 	model.Name = petData.Name
@@ -343,7 +346,7 @@ function PetModelFactory.Create(petData, options)
 	model:ScaleTo(0.8) -- keeps cube pets about as tall as the old critters next to a player
 
 	-- Golden and Mythic pets sparkle (in the world; icons skip effects).
-	if withEffects and (petData.Golden or petData.Rarity == "Mythic") then
+	if withEffects and (petData.Golden or petData.Shiny or SPARKLY[petData.Rarity]) then
 		local attachment = Instance.new("Attachment")
 		attachment.Position = V(0, 0.8, 0)
 		attachment.Parent = body
