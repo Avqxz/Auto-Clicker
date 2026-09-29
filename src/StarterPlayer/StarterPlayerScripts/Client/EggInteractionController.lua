@@ -750,7 +750,8 @@ function EggInteractionController.Start(deps)
 		if elapsed < 0.15 then return end
 		elapsed = 0
 		if animation.IsPlaying() then return end
-		local egg = nearestEgg()
+		-- The spawn is next to the Starter Egg: stay closed until the starter pet is picked.
+		local egg = if deps.getData().HasPickedStarterPet then nearestEgg() else nil
 		if egg ~= dismissedEgg then dismissedEgg = nil end
 		if egg and egg ~= dismissedEgg then
 			if egg ~= currentEgg or not root.Visible then open(egg) end

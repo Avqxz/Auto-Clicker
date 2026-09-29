@@ -214,7 +214,6 @@ GameConfig.AutoClickers = {
 GameConfig.StarterPets = {
 	{ Name = "Puppy", Rarity = "Common", Multiplier = 1.1 },
 	{ Name = "Bunny", Rarity = "Common", Multiplier = 1.1 },
-	{ Name = "Fox", Rarity = "Common", Multiplier = 1.1 },
 }
 
 -- Players see this as "Ascension"; the save keeps the original RebirthCount field.
